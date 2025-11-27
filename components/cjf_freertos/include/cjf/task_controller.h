@@ -1,0 +1,40 @@
+#ifndef B8CD9BF7_C305_487C_B5BF_C44F1A14EC7F
+#define B8CD9BF7_C305_487C_B5BF_C44F1A14EC7F
+
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
+namespace cjf
+{
+  // Reusable class for controlling task execution via direct-to-task notifications
+  class task_controller
+  {
+  public:
+    task_controller();
+    task_controller(TaskHandle_t handle);
+
+    // Start the task's work loop
+    void start();
+
+    // Stop the task's work loop
+    void stop();
+
+    // Check if a start notification was received (blocks until notification)
+    bool wait_for_start();
+
+    // Check if a stop notification was received (non-blocking)
+    bool should_run();
+
+    static task_controller create_task(
+        TaskFunction_t task_func,
+        const char *name,
+        uint16_t stack_depth,
+        void *params,
+        UBaseType_t priority);
+
+  private:
+    TaskHandle_t task_handle;
+  };
+} // namespace cjf
+
+#endif /* B8CD9BF7_C305_487C_B5BF_C44F1A14EC7F */

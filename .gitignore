@@ -1,0 +1,11 @@
+.vscode/
+build/
+certs/
+esp_secure_cert_data/
+managed_components/
+runtime_config/
+scratch/
+esp_secure_cert_config.csv
+sdkconfig
+sdkconfig.old
+sync.ffs_db

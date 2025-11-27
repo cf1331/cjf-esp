@@ -1,0 +1,231 @@
+#ifndef DF52F6F1_46F9_4EE4_87A5_2CD669083D19
+#define DF52F6F1_46F9_4EE4_87A5_2CD669083D19
+#ifndef DD1AC017_3428_492C_A514_64D64F435F6F
+#define DD1AC017_3428_492C_A514_64D64F435F6F
+
+#include "cjf/gpio.h"
+#include <array>
+#include <concepts>
+#include <cstdint>
+#include <esp_err.h>
+#include <expected>
+#include <ranges>
+
+// namespace cjf
+// {
+//   template <typename T>
+//   concept atomic_gpio_device_like = requires(T &device) {
+//     { device.write_pins(uint32_t{}, gpio_like&...{}) } -> std::same_as<esp_err_t>;
+//   };
+
+// } // namespace cjf
+
+// namespace cjf::atomic_gpio
+// {
+//   template <gpio_device_like Device, gpio_like... Pins>
+//   constexpr std::weak_ptr<gpio_device> get_device(const Pins &...pins) noexcept
+//   {
+//     if constexpr (sizeof...(pins) == 0)
+//     {
+//       return {};
+//     }
+//     else
+//     {
+//       return (pins.device(), ...);
+//     }
+//   }
+
+
+//   // Helper to check if all pins belong to the same device
+//   template <gpio_like... Pins>
+//   constexpr bool have_common_device(const Pins &...pins) noexcept
+//   {
+//     if constexpr (sizeof...(pins) < 2)
+//     {
+//       return true;
+//     }
+//     else
+//     {
+//       auto devices = std::array{get_device(pins)...};
+//       auto first_device = devices[0];
+
+//       for (const auto &device : devices)
+//       {
+//         if constexpr (requires { device.lock(); first_device.lock(); })
+//         {
+//           auto dev = device.lock();
+//           auto first_dev = first_device.lock();
+//           if (!dev || !first_dev || dev != first_dev)
+//           {
+//             return false;
+//           }
+//         }
+//         else
+//         {
+//           if (!device || device != first_device)
+//           {
+//             return false;
+//           }
+//         }
+//       }
+//       return true;
+//     }
+//   }
+
+//   // Template function for atomic write operations on multiple pins
+//   template <gpio_like... Pins>
+//   constexpr esp_err_t try_write_pins(uint32_t value, const Pins &...pins) noexcept
+//   {
+//     static_assert(sizeof...(pins) > 0, "At least one pin required");
+
+//     if constexpr (!have_common_device(pins...))
+//     {
+//       return ESP_ERR_NOT_SUPPORTED;
+//     }
+
+//     // Get the first pin's device to check atomic support
+//     auto first_device = get_device((pins, ...));
+//     if constexpr (requires { first_device.lock(); })
+//     {
+//       auto device = first_device.lock();
+//       if (!device || !device->supports_atomic_writes())
+//       {
+//         return ESP_ERR_NOT_SUPPORTED;
+//       }
+//     }
+//     else
+//     {
+//       if (!first_device || !first_device.supports_atomic_writes())
+//       {
+//         return ESP_ERR_NOT_SUPPORTED;
+//       }
+//     }
+
+//     // Try device-specific atomic write
+//     if constexpr (requires { first_device.write_pins(value, pins...); })
+//     {
+//       return first_device.write_pins(value, pins...);
+//     }
+//     else
+//     {
+//       // Fallback: individual pin writes (not truly atomic)
+//       esp_err_t result = ESP_OK;
+//       uint32_t pin_mask = 1;
+//       ((result = pins.set_level((value & pin_mask) != 0), pin_mask <<= 1), ...);
+//       return result;
+//     }
+//   }
+
+//   // // Template function for atomic read operations on multiple pins
+//   // template<gpio_pin_like... Pins>
+//   // constexpr std::expected<uint32_t, esp_err_t> try_read_pins(const Pins&... pins) noexcept {
+//   //   static_assert(sizeof...(pins) > 0, "At least one pin required");
+
+//   //   if constexpr (!have_common_device(pins...)) {
+//   //     return std::unexpected(ESP_ERR_NOT_SUPPORTED);
+//   //   }
+
+//   //   // Get the first pin's device to check atomic support
+//   //   auto first_device = get_device((pins, ...));
+//   //   if constexpr (requires { first_device.lock(); }) {
+//   //     auto device = first_device.lock();
+//   //     if (!device || !device->supports_atomic_writes()) {
+//   //       return std::unexpected(ESP_ERR_NOT_SUPPORTED);
+//   //     }
+//   //   } else {
+//   //     if (!first_device || !first_device.supports_atomic_writes()) {
+//   //       return std::unexpected(ESP_ERR_NOT_SUPPORTED);
+//   //     }
+//   //   }
+
+//   //   // Try device-specific atomic read
+//   //   if constexpr (requires { first_device.read_pins(pins...); }) {
+//   //     return first_device.read_pins(pins...);
+//   //   } else {
+//   //     // Fallback: individual pin reads (not truly atomic)
+//   //     uint32_t result = 0;
+//   //     uint32_t pin_mask = 1;
+//   //     auto read_pin = [&](const auto& pin) {
+//   //       auto level = pin.get_level();
+//   //       if (!level) return level.error();
+//   //       if (*level) result |= pin_mask;
+//   //       pin_mask <<= 1;
+//   //       return ESP_OK;
+//   //     };
+
+//   //     esp_err_t error = ESP_OK;
+//   //     ((error = read_pin(pins)) == ESP_OK && ...);
+
+//   //     if (error != ESP_OK) {
+//   //       return std::unexpected(error);
+//   //     }
+//   //     return result;
+//   //   }
+//   // }
+
+//   // // Range-based overloads
+//   // template <atomic_gpio_pin_range PinRange>
+//   // constexpr esp_err_t try_write_pins(const PinRange &pins, uint32_t value) noexcept
+//   // {
+//   //   if (std::ranges::empty(pins))
+//   //   {
+//   //     return ESP_ERR_INVALID_ARG;
+//   //   }
+
+//   //   // Convert range to parameter pack and call variadic version
+//   //   // This is a simplified implementation - full implementation would need
+//   //   // proper range expansion techniques
+//   //   return ESP_ERR_NOT_SUPPORTED; // TODO: Implement range expansion
+//   // }
+
+//   // template<atomic_gpio_pin_range PinRange>
+//   // constexpr std::expected<uint32_t, esp_err_t> try_read_pins(const PinRange& pins) noexcept {
+//   //   if (std::ranges::empty(pins)) {
+//   //     return std::unexpected(ESP_ERR_INVALID_ARG);
+//   //   }
+
+//   //   // Convert range to parameter pack and call variadic version
+//   //   // This is a simplified implementation - full implementation would need
+//   //   // proper range expansion techniques
+//   //   return std::unexpected(ESP_ERR_NOT_SUPPORTED); // TODO: Implement range expansion
+//   // }
+
+// } // namespace cjf::atomic_gpio
+
+// // =============================================================================
+// // USAGE EXAMPLES
+// // =============================================================================
+
+// /*
+// // Example usage of the new template-based atomic GPIO API:
+
+// #include <cjf/atomic_gpio.h>
+// #include <cjf/gpio.h>
+
+// void atomic_gpio_example() {
+//   using namespace cjf;
+
+//   // Create some GPIO pins
+//   auto gpio1 = make_gpio(GPIO_NUM_1);
+//   auto gpio2 = make_gpio(GPIO_NUM_2);
+//   auto gpio3 = make_gpio(GPIO_NUM_3);
+
+//   if (gpio1 && gpio2 && gpio3) {
+//     // Atomic write to multiple pins - compile-time type checking
+//     auto result = atomic_gpio::try_write_pins(0b101, *gpio1, *gpio2, *gpio3);
+
+//     // Atomic read from multiple pins
+//     auto levels = atomic_gpio::try_read_pins(*gpio1, *gpio2, *gpio3);
+
+//     if (levels) {
+//       // Process the 3-bit value from the pins
+//       uint32_t pin_states = *levels;
+//     }
+//   }
+// }
+// */
+
+#endif /* DD1AC017_3428_492C_A514_64D64F435F6F */
+
+
+#endif /* DF52F6F1_46F9_4EE4_87A5_2CD669083D19 */
