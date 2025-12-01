@@ -58,7 +58,7 @@ namespace cjf
    * @param default_tz Default POSIX timezone string to use if none found in NVS
    * @return `ESP_OK` on success, error code on failure
    */
-  esp_err_t load_timezone(const std::expected<nvs, esp_err_t> &nvs, const char *default_tz);
+  esp_err_t load_timezone(std::shared_ptr<cjf::nvs> nvs, const char *default_tz);
 
   /**
    * @brief Set the system timezone
@@ -168,7 +168,7 @@ namespace cjf
    * @return Expected containing event_handler on success, or esp_err_t on failure
    */
   template <time_sink T>
-  std::expected<event_handler, esp_err_t> sync_time_on(esp_event_base_t event_base, int32_t event_id, const T &dst, const char *dst_name = "sink") noexcept
+std::expected<event_handler, esp_err_t> sync_time_on(esp_event_base_t event_base, int32_t event_id, const T &dst, const char *dst_name = "sink") noexcept
   {
     static constexpr const char *TAG = "cjf:time";
     auto event_handler = [](void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)

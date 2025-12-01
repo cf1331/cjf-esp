@@ -42,6 +42,26 @@ namespace cjf
     return nvs_get_str(handle_.get(), key, str, &len);
   }
 
+  std::expected<std::string, esp_err_t> nvs_namespace::get_string(const char *key) const noexcept
+  {
+    // First, get the required length
+    size_t required_size = 0;
+    esp_err_t err = nvs_get_str(handle_.get(), key, nullptr, &required_size);
+    if (err != ESP_OK)
+    {
+      return std::unexpected(err);
+    }
+
+    // Allocate buffer and read the string
+    std::string result(required_size - 1, '\0'); // -1 because required_size includes null terminator
+    err = nvs_get_str(handle_.get(), key, result.data(), &required_size);
+    if (err != ESP_OK)
+    {
+      return std::unexpected(err);
+    }
+    return result;
+  }
+
   esp_err_t nvs_namespace::set_string(const char *key, const char *str) const noexcept
   {
     return nvs_set_str(handle_.get(), key, str);

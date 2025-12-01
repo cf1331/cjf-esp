@@ -1,0 +1,17 @@
+UseTab: Never
+IndentWidth: 2
+BreakBeforeBraces: Allman
+AllowShortIfStatementsOnASingleLine: WithoutElse
+IndentCaseLabels: false
+ColumnLimit: 0
+
+# Preferred style for operators, especially ternary operators
+AlignOperands: DontAlign
+ContinuationIndentWidthL 2
+BreakBeforeTernaryOperators: true
+
+# Preferred style for namespaces
+NamespaceIndentation: All
+
+# Preferred style of chained method calls
+PenaltyIndentedWhitespace: 1

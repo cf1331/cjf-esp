@@ -1,27 +1,47 @@
 #ifndef E5346742_E5F1_48E3_9463_6B2868629BC6
 #define E5346742_E5F1_48E3_9463_6B2868629BC6
 
+/**
+ * @file params.h
+ * @brief Type-safe parameter wrapper with automatic type conversion and serialization
+ *
+ * Provides a polymorphic parameter system for wrapping primitive types and strings,
+ * with automatic type conversions and observer pattern support. Designed for
+ * configuration management, network serialization, and value binding scenarios.
+ */
+
 #include <cjf/string.h>
+#include <charconv>
 #include <cstdint>
 #include <expected>
-#include <stdexcept>
 #include <string>
+#include <optional>
 #include <variant>
 
 namespace cjf
 {
+  /// @cond INTERNAL
   template <class>
   inline constexpr bool always_false_v = false;
+  /// @endcond
 
+  /**
+   * @brief Error codes for parameter operations
+   */
   enum param_error
   {
-    ok = 0,
-    no_value,
-    read_only,
-    invalid_cast,
-    out_of_range,
+    ok = 0,           ///< Operation succeeded
+    no_value,         ///< Parameter has no value set
+    read_only,        ///< Attempted to modify a read-only parameter
+    invalid_cast,     ///< Type conversion failed (e.g., "abc" to int)
+    out_of_range,     ///< Value outside valid range for target type
   };
 
+  /**
+   * @brief Variant type holding all supported parameter value types
+   *
+   * Supports all signed/unsigned integers (8/16/32/64-bit), bool, float, double, and string.
+   */
   using param_value = std::variant<
       int8_t,
       uint8_t,
@@ -36,23 +56,104 @@ namespace cjf
       double,
       std::string>;
 
+  /**
+   * @brief Sentinel value representing a parameter with no value
+   */
   inline constexpr auto param_null = std::unexpected(param_error::no_value);
 
+  /**
+   * @brief Abstract base class for type-safe parameter wrappers
+   *
+   * Provides a polymorphic interface for parameter values with automatic type
+   * conversion, validation, and observer notifications. Thread-safe when using
+   * derived implementations with proper synchronization.
+   *
+   * @note Implementations: See `const_param` for immutable values and
+   *       `mutable_param<T>` for mutable values with type constraints.
+   */
   class param
   {
   public:
+    /**
+     * @brief Callback function type for value change notifications
+     * @param p Reference to the parameter that changed
+     * @param ctx User-provided context pointer passed to watch()
+     */
     using value_changed_func = void (*)(param &p, void *ctx);
+
+    virtual ~param() = default;
+
+    /**
+     * @brief Get the current parameter value
+     * @return The value wrapped in `std::expected`, or error if no value set
+     */
     virtual std::expected<param_value, param_error> get() const noexcept = 0;
+
+    /**
+     * @brief Set the parameter value
+     * @param value New value to store, or error state
+     * @return `param_error::ok` on success, error code otherwise
+     */
     virtual param_error set(const std::expected<param_value, param_error> &value) = 0;
+
+    /**
+     * @brief Register a callback to be notified when the value changes
+     * @param callback Function to call on value changes
+     * @param ctx Optional user context passed to callback
+     */
     virtual void watch(value_changed_func callback, void *ctx = nullptr) = 0;
+
+    /**
+     * @brief Unregister a previously registered callback
+     * @param callback The callback function to remove
+     */
     virtual void unwatch(value_changed_func callback) = 0;
 
+    /**
+     * @brief Get the value converted to a specific type
+     * @tparam T Target type for conversion
+     * @return Converted value or error if conversion fails
+     *
+     * @code{.cpp}
+     * mutable_param<int> param(42);
+     * auto str = param.get_as<std::string>();  // Returns "42"
+     * auto val = param.get_as<double>();        // Returns 42.0
+     * @endcode
+     */
     template <typename T>
-    const std::expected<T, param_error> get_as() const;
+    std::expected<T, param_error> get_as() const;
 
+    /**
+     * @brief Check if the parameter has a value
+     * @return `true` if value is set, `false` if no_value
+     */
     constexpr bool has_value() const noexcept;
   };
 
+  /**
+   * @brief Convert a param_value to a specific type with automatic conversion
+   * @tparam T Target type for conversion
+   * @param value The variant value to convert
+   * @return Converted value or error code
+   *
+   * Supports conversions between:
+   * - Numeric types (with range checking)
+   * - String to/from numeric and bool
+   * - Bool to/from string ("true"/"false", "1"/"0")
+   *
+   * @note String parsing is case-insensitive. Uses `std::from_chars` for
+   *       exception-free parsing.
+   *
+   * @code{.cpp}
+   * param_value v = 42;
+   * auto str = param_cast<std::string>(v);  // "42"
+   * auto dbl = param_cast<double>(v);       // 42.0
+   *
+   * param_value s = std::string("200");
+   * auto i = param_cast<int>(s);            // 200
+   * auto too_big = param_cast<int8_t>(s);   // param_error::out_of_range
+   * @endcode
+   */
   template <typename T>
   constexpr std::expected<T, param_error> param_cast(const param_value &value)
   {
@@ -102,8 +203,15 @@ namespace cjf
             {
               // Parse the string to get a signed integer. If the value is larger or
               // smaller than the range of type T, return param_error::out_of_range.
-              const long long int_val = std::stoll(v);
-              if (int_val < std::numeric_limits<T>::min() || int_val > std::numeric_limits<T>::max())
+              long long int_val;
+              auto result = std::from_chars(v.data(), v.data() + v.size(), int_val);
+              if (result.ec == std::errc::invalid_argument)
+              {
+                return std::unexpected(param_error::invalid_cast);
+              }
+              if (result.ec == std::errc::result_out_of_range ||
+                  int_val < std::numeric_limits<T>::min() ||
+                  int_val > std::numeric_limits<T>::max())
               {
                 return std::unexpected(param_error::out_of_range);
               }
@@ -112,15 +220,21 @@ namespace cjf
             else if constexpr(std::is_integral_v<T> && !std::is_signed_v<T>)
             {
               // Return param_error::out_of_range if the value is negative.
-              // The check is done on the string because std::stoull() will
+              // The check is done on the string because std::from_chars will
               // wrap around a negative value to a large positive value.
               auto n = v.find_first_not_of(" \f\n\r\t\v");
               if (n != std::string::npos && v[n] == '-')
               {
                 return std::unexpected(param_error::out_of_range);
               }
-              const unsigned long long uint_val = std::stoull(v);
-              if (uint_val > std::numeric_limits<T>::max())
+              unsigned long long uint_val;
+              auto result = std::from_chars(v.data(), v.data() + v.size(), uint_val);
+              if (result.ec == std::errc::invalid_argument)
+              {
+                return std::unexpected(param_error::invalid_cast);
+              }
+              if (result.ec == std::errc::result_out_of_range ||
+                  uint_val > std::numeric_limits<T>::max())
               {
                 return std::unexpected(param_error::out_of_range);
               }
@@ -149,6 +263,12 @@ namespace cjf
         value);
   }
 
+  /**
+   * @brief Convert an expected param_value to a specific type
+   * @tparam T Target type for conversion
+   * @param value Expected containing value or error
+   * @return Converted value or propagated error
+   */
   template <typename T>
   constexpr std::expected<T, param_error> param_cast(const std::expected<param_value, param_error> &value)
   {
@@ -156,6 +276,12 @@ namespace cjf
                  : std::unexpected(value.error());
   }
 
+  /**
+   * @brief Convert a param's value to a specific type
+   * @tparam T Target type for conversion
+   * @param param The parameter to extract and convert
+   * @return Converted value or error
+   */
   template <typename T>
   constexpr std::expected<T, param_error> param_cast(const param &param)
   {
@@ -168,7 +294,7 @@ namespace cjf
   }
 
   template <typename T>
-  const std::expected<T, param_error> param::get_as() const
+  std::expected<T, param_error> param::get_as() const
   {
     return param_cast<T>(get());
   }

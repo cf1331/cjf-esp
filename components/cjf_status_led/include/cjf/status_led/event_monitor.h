@@ -90,15 +90,22 @@ namespace cjf
         cjf::status_led &status_led,
         const event_map &event_modes);
 
+    void clear_override() noexcept;
+    void clear_override_on_next_event() noexcept;
+    void disable() noexcept;
+    void enable() noexcept;
+    void override(const status_led_mode* mode) noexcept;
     void reapply_last_mode() noexcept;
 
   private:
     struct context
     {
+      bool enabled = false;
       const event_map &event_modes;
       cjf::status_led &status_led;
       std::vector<cjf::event_handler> event_handlers;
       event_key_t last_event;
+      const status_led_mode* override_mode = nullptr;
     };
     std::unique_ptr<context> ctx_;
 

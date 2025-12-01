@@ -7,7 +7,7 @@ namespace cjf
   status_led::status_led(cjf::led_strip &led) noexcept
       : current_mode_(nullptr), leds_(led) {}
 
-  void status_led::off() noexcept
+  void status_led::clear() noexcept
   {
     current_mode_.reset();
     leds_.clear();

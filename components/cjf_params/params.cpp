@@ -1,7 +1,5 @@
-#include <stdio.h>
 #include "cjf/params.h"
 
-void func(void)
-{
-
-}
+// This file is intentionally minimal.
+// Template implementations are in headers.
+// Non-template implementations (const_param) have separate .cpp files.

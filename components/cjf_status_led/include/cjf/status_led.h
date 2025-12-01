@@ -48,7 +48,7 @@ namespace cjf
      *
      * Clears the LED strip and stops the current mode's animation timer.
      */
-    void off() noexcept;
+    void clear() noexcept;
 
     /**
      * @brief Set a new animation mode

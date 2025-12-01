@@ -7,6 +7,7 @@
 #include <experimental/scope>
 #include <nvs_flash.h>
 #include <nvs_handle.hpp>
+#include <string>
 
 namespace cjf
 {
@@ -94,6 +95,7 @@ namespace cjf
     esp_err_t set_blob(const char *key, const void *blob, size_t len) const noexcept;
 
     esp_err_t get_string(const char *key, char *str, size_t len) const noexcept;
+    std::expected<std::string, esp_err_t> get_string(const char *key) const noexcept;
     esp_err_t set_string(const char *key, const char *str) const noexcept;
 
     operator nvs_handle_t() const noexcept

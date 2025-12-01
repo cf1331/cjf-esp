@@ -28,7 +28,7 @@ namespace cjf
   class task_pool
   {
   public:
-    constexpr static const char *TASK_POOL_TAG = "cjf:task_pool";
+    constexpr static const char *TAG = "cjf:task_pool";
 
     /// Function signature for processing work items
     using work_handler_func = std::function<void(WorkItem &item)>;
@@ -115,15 +115,15 @@ namespace cjf
   template <typename WorkItem>
   std::expected<task_pool<WorkItem>, esp_err_t> task_pool<WorkItem>::create(const config &cfg)
   {
-    RETURN_UNEXPECTED_ON_FALSE(cfg.handler, ESP_ERR_INVALID_ARG);
+    RETURN_UNEXPECTED_ON_FALSE(cfg.handler, ESP_ERR_INVALID_ARG, TAG);
 
     auto ctx = std::make_unique<task_pool_context>(
         true,
         make_queue(cfg.queue_depth, sizeof(queue_item)),
         create_semaphore(cfg.worker_count, 0),
         cfg.handler);
-    RETURN_UNEXPECTED_ON_FALSE(ctx->work_queue, ESP_ERR_NO_MEM);
-    RETURN_UNEXPECTED_ON_FALSE(ctx->workers_done_sem, ESP_ERR_NO_MEM);
+    RETURN_UNEXPECTED_ON_FALSE(ctx->work_queue, ESP_ERR_NO_MEM, TAG);
+    RETURN_UNEXPECTED_ON_FALSE(ctx->workers_done_sem, ESP_ERR_NO_MEM, TAG);
 
     std::vector<task_ptr> worker_tasks;
     worker_tasks.reserve(cfg.worker_count);
@@ -135,7 +135,7 @@ namespace cjf
           cfg.stack_size,
           ctx.get(),
           cfg.priority);
-      RETURN_UNEXPECTED_ON_FALSE(task, ESP_ERR_NO_MEM);
+      RETURN_UNEXPECTED_ON_FALSE(task, ESP_ERR_NO_MEM, TAG);
       worker_tasks.push_back(std::move(task));
     }
     return task_pool(std::move(worker_tasks), std::move(ctx));

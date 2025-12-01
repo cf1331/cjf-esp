@@ -35,6 +35,20 @@ namespace cjf
   private:
     TaskHandle_t task_handle;
   };
+
+  template <typename Optional>
+  void delay_until_or_stop(TickType_t *previous_wake_time, Optional time_increment, task_controller &controller)
+  {
+    if (time_increment)
+    {
+      xTaskDelayUntil(previous_wake_time, *time_increment);
+    }
+    else
+    {
+      controller.stop();
+    }
+  }
+
 } // namespace cjf
 
 #endif /* B8CD9BF7_C305_487C_B5BF_C44F1A14EC7F */
