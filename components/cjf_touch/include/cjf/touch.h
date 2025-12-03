@@ -45,6 +45,12 @@ namespace cjf
         const int channel_id,
         const config_type &config) noexcept;
 
+    int32_t channel_id() const noexcept;
+
+    std::expected<uint32_t, esp_err_t> read_benchmark() noexcept;
+    std::expected<uint32_t, esp_err_t> read_raw() noexcept;
+    std::expected<uint32_t, esp_err_t> read_smooth() noexcept;
+
     esp_err_t reconfigure(const config_type &config) noexcept;
 
     operator touch_channel_handle_t() const noexcept;
@@ -57,8 +63,9 @@ namespace cjf
 
     using handle_type = std::unique_ptr<touch_channel_s, deleter>;
     handle_type handle_;
+    int32_t channel_id_; // TODO: invalidate the channel_id when the channel is moved
 
-    touch_channel(handle_type handle) noexcept;
+    touch_channel(handle_type handle, int32_t channel_id) noexcept;
   };
 
 } // namespace cjf

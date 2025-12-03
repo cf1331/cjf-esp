@@ -6,17 +6,17 @@ namespace cjf
   static const char *CJF_CONST_PARAM = "cjf:const_param";
 
 
-  const_param::const_param(const std::expected<param_value, param_error>& value)
+  const_param::const_param(const param_value& value)
     : value_(value)
   {
   }
 
-  std::expected<param_value, param_error> const_param::get() const noexcept
+  param_value const_param::get() const noexcept
   {
     return value_;
   }
 
-  param_error const_param::set(const std::expected<param_value, param_error> &value)
+  param_error const_param::set(const param_value &value)
   {
     ESP_LOGW(CJF_CONST_PARAM, "setting value is not allowed");
     return param_error::read_only;

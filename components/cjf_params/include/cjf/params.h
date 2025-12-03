@@ -31,7 +31,6 @@ namespace cjf
   enum param_error
   {
     ok = 0,           ///< Operation succeeded
-    no_value,         ///< Parameter has no value set
     read_only,        ///< Attempted to modify a read-only parameter
     invalid_cast,     ///< Type conversion failed (e.g., "abc" to int)
     out_of_range,     ///< Value outside valid range for target type
@@ -40,17 +39,22 @@ namespace cjf
   /**
    * @brief Variant type holding all supported parameter value types
    *
-   * Supports all signed/unsigned integers (8/16/32/64-bit), bool, float, double, and string.
+   * Supports all integer types, bool, float, double, and string.
+   * std::monostate represents a null/empty parameter value.
    */
   using param_value = std::variant<
-      int8_t,
-      uint8_t,
-      int16_t,
-      uint16_t,
-      int32_t,
-      uint32_t,
-      int64_t,
-      uint64_t,
+      std::monostate,
+      char,
+      signed char,
+      unsigned char,
+      short,
+      unsigned short,
+      int,
+      unsigned int,
+      long,
+      unsigned long,
+      long long,
+      unsigned long long,
       bool,
       float,
       double,
@@ -59,7 +63,7 @@ namespace cjf
   /**
    * @brief Sentinel value representing a parameter with no value
    */
-  inline constexpr auto param_null = std::unexpected(param_error::no_value);
+  inline const param_value param_null = std::monostate{};
 
   /**
    * @brief Abstract base class for type-safe parameter wrappers
@@ -75,6 +79,11 @@ namespace cjf
   {
   public:
     /**
+     * @brief Type alias for null parameter value (std::monostate)
+     */
+    using null_type = std::monostate;
+
+    /**
      * @brief Callback function type for value change notifications
      * @param p Reference to the parameter that changed
      * @param ctx User-provided context pointer passed to watch()
@@ -85,16 +94,16 @@ namespace cjf
 
     /**
      * @brief Get the current parameter value
-     * @return The value wrapped in `std::expected`, or error if no value set
+     * @return The parameter value
      */
-    virtual std::expected<param_value, param_error> get() const noexcept = 0;
+    virtual param_value get() const noexcept = 0;
 
     /**
      * @brief Set the parameter value
-     * @param value New value to store, or error state
+     * @param value New value to store
      * @return `param_error::ok` on success, error code otherwise
      */
-    virtual param_error set(const std::expected<param_value, param_error> &value) = 0;
+    virtual param_error set(const param_value &value) = 0;
 
     /**
      * @brief Register a callback to be notified when the value changes
@@ -161,7 +170,12 @@ namespace cjf
         [](auto &&v) -> std::expected<T, param_error>
         {
           using V = std::decay_t<decltype(v)>;
-          if constexpr (std::is_same_v<T, V>)
+          if constexpr (std::is_same_v<V, param::null_type>)
+          {
+            // null_type is not convertible to any type
+            return std::unexpected(param_error::invalid_cast);
+          }
+          else if constexpr (std::is_same_v<T, V>)
             // When the return type is the same as the value type, no conversion
             // necessary
             return v;
@@ -263,18 +277,18 @@ namespace cjf
         value);
   }
 
-  /**
-   * @brief Convert an expected param_value to a specific type
-   * @tparam T Target type for conversion
-   * @param value Expected containing value or error
-   * @return Converted value or propagated error
-   */
-  template <typename T>
-  constexpr std::expected<T, param_error> param_cast(const std::expected<param_value, param_error> &value)
-  {
-    return value ? param_cast<T>(*value)
-                 : std::unexpected(value.error());
-  }
+  // /**
+  //  * @brief Convert an expected param_value to a specific type
+  //  * @tparam T Target type for conversion
+  //  * @param value Expected containing value or error
+  //  * @return Converted value or propagated error
+  //  */
+  // template <typename T>
+  // constexpr std::expected<T, param_error> param_cast(const std::expected<param_value, param_error> &value)
+  // {
+  //   return value ? param_cast<T>(*value)
+  //                : std::unexpected(value.error());
+  // }
 
   /**
    * @brief Convert a param's value to a specific type
@@ -290,13 +304,25 @@ namespace cjf
 
   inline constexpr bool param::has_value() const noexcept
   {
-    return get().has_value();
+    return !std::holds_alternative<null_type>(get());
   }
 
   template <typename T>
   std::expected<T, param_error> param::get_as() const
   {
     return param_cast<T>(get());
+  }
+
+  template <typename T>
+  param_error try_set_from_param(T& target, const param& source)
+  {
+    auto value = source.get_as<T>();
+    if (!value)
+    {
+      return value.error();
+    }
+    target = *value;
+    return param_error::ok;
   }
 
 } // namespace cjf

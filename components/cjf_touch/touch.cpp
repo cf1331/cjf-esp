@@ -1,5 +1,5 @@
 #include "cjf/touch.h"
-#include <stdio.h>
+#include <driver/touch_sens.h>
 
 namespace cjf
 {
@@ -48,7 +48,33 @@ namespace cjf
         &handle_raw);
     handle_type handle(handle_raw);
     RETURN_UNEXPECTED_ON_ERROR(err, TAG);
-    return touch_channel(std::move(handle));
+    return touch_channel(std::move(handle), channel_id);
+  }
+
+  int32_t touch_channel::channel_id() const noexcept
+  {
+    return channel_id_;
+  }
+
+  std::expected<uint32_t, esp_err_t> touch_channel::read_benchmark() noexcept
+  {
+    uint32_t benchmark = 0;
+    RETURN_UNEXPECTED_ON_ERROR(touch_channel_read_data(*this, TOUCH_CHAN_DATA_TYPE_BENCHMARK, &benchmark), TAG);
+    return benchmark;
+  }
+
+  std::expected<uint32_t, esp_err_t> touch_channel::read_raw() noexcept
+  {
+    uint32_t raw = 0;
+    RETURN_UNEXPECTED_ON_ERROR(touch_channel_read_data(*this, TOUCH_CHAN_DATA_TYPE_RAW, &raw), TAG);
+    return raw;
+  }
+
+  std::expected<uint32_t, esp_err_t> touch_channel::read_smooth() noexcept
+  {
+    uint32_t smooth = 0;
+    RETURN_UNEXPECTED_ON_ERROR(touch_channel_read_data(*this, TOUCH_CHAN_DATA_TYPE_SMOOTH, &smooth), TAG);
+    return smooth;
   }
 
   esp_err_t touch_channel::reconfigure(const config_type &config) noexcept
@@ -69,7 +95,7 @@ namespace cjf
     }
   }
 
-  touch_channel::touch_channel(handle_type handle) noexcept
-      : handle_(std::move(handle)) {}
+  touch_channel::touch_channel(handle_type handle, int32_t channel_id) noexcept
+      : handle_(std::move(handle)), channel_id_(channel_id) {}
 
 } // namespace cjf

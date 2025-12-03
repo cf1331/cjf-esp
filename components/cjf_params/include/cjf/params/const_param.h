@@ -36,13 +36,13 @@ namespace cjf
      * @brief Construct a const_param with an initial value
      * @param value The immutable value to store
      */
-    const_param(const std::expected<param_value, param_error>& value);
+    const_param(const param_value& value);
 
     /**
      * @brief Get the constant value
      * @return The stored value
      */
-    std::expected<param_value, param_error> get() const noexcept override;
+    param_value get() const noexcept override;
 
     /**
      * @brief Attempt to set the value (always fails)
@@ -51,7 +51,7 @@ namespace cjf
      * @warning Generates compiler warning when called
      */
       __attribute__((warning("the param value is read-only. const_param::set() will always return param_error::read_only")))
-    param_error set(const std::expected<param_value, param_error> &value) override;
+    param_error set(const param_value &value) override;
 
     /**
      * @brief Register a value change callback (no-op for const_param)
@@ -68,7 +68,7 @@ namespace cjf
     void unwatch(value_changed_func callback) override;
 
   private:
-    const std::expected<param_value, param_error> value_;
+    const param_value value_;
   };
 
 }

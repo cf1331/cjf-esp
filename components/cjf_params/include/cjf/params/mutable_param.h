@@ -49,8 +49,9 @@ namespace cjf
     /**
      * @brief Construct a mutable_param with an optional initial value
      * @param value Initial value, or `param_null` for no value
+     * @note If value cannot be converted to type T, the parameter is initialized to null
      */
-    mutable_param(const std::expected<param_value, param_error> &value = param_null);
+    mutable_param(const param_value &value = param_null);
 
     /**
      * @brief Construct a mutable_param with an initial value
@@ -61,16 +62,10 @@ namespace cjf
     mutable_param(U &&value);
 
     /**
-     * @brief Construct a mutable_param with no value (from param_null)
-     * @param err Unexpected error (typically param_null)
-     */
-    mutable_param(const std::unexpected<param_error> &err);
-
-    /**
      * @brief Get the current value
-     * @return The stored value or error state
+     * @return The stored value
      */
-    std::expected<param_value, param_error> get() const noexcept override;
+    param_value get() const noexcept override;
 
     /**
      * @brief Set the parameter value with type validation
@@ -80,7 +75,7 @@ namespace cjf
      * The value is first validated to ensure it's convertible to type `T`.
      * If successful, the value is stored and all registered watchers are notified.
      */
-    param_error set(const std::expected<param_value, param_error> &value) override;
+    param_error set(const param_value &value) override;
 
     /**
      * @brief Register a callback for value change notifications
@@ -96,13 +91,14 @@ namespace cjf
     void unwatch(value_changed_func callback) override;
 
   private:
-    std::expected<param_value, param_error> value_;
+    param_value value_;
     watchable<param> watchable_;
   };
 
   template <typename T>
-  inline mutable_param<T>::mutable_param(const std::expected<param_value, param_error> &value)
-      : value_(value)
+  inline mutable_param<T>::mutable_param(const param_value &value)
+      : value_(std::holds_alternative<null_type>(value) ? param_null :
+               param_cast<T>(value).has_value() ? value : param_null)
   {
   }
 
@@ -115,27 +111,22 @@ namespace cjf
   }
 
   template <typename T>
-  inline mutable_param<T>::mutable_param(const std::unexpected<param_error> &err)
-      : value_(err)
-  {
-  }
-
-  template <typename T>
-  inline std::expected<param_value, param_error> mutable_param<T>::get() const noexcept
+  inline param_value mutable_param<T>::get() const noexcept
   {
     return value_;
   }
 
   template <typename T>
-  inline param_error mutable_param<T>::set(const std::expected<param_value, param_error> &value)
+  inline param_error mutable_param<T>::set(const param_value &value)
   {
-    // Ensure that value is castable to T
-    auto new_value = param_cast<T>(value);
+    auto new_value = std::holds_alternative<null_type>(value)
+                    ? std::expected<param_value, param_error>(value)
+                    : param_cast<T>(value);
     if (!new_value)
     {
       return new_value.error();
     }
-    value_ = new_value;
+    value_ = *new_value;
     watchable_.notify(*this);
     return param_error::ok;
   }

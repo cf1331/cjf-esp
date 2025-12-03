@@ -6,17 +6,15 @@ namespace cjf
 
   cJSON *to_json(const cjf::param &param)
   {
-    if (!param.has_value())
-    {
-      return cJSON_CreateNull();
-    }
-    else
-    {
-      param_value value = param.get().value();
-      return std::visit([](auto &&arg)
-                        {
+    param_value value = param.get();
+    return std::visit([](auto &&arg)
+                      {
       using T = std::decay_t<decltype(arg)>;
-      if constexpr (std::is_same_v<T, bool>)
+      if constexpr (std::is_same_v<T, param::null_type>)
+      {
+        return cJSON_CreateNull();
+      }
+      else if constexpr (std::is_same_v<T, bool>)
       {
         return cJSON_CreateBool(arg);
       }
@@ -28,9 +26,7 @@ namespace cjf
       {
         return cJSON_CreateNumber(arg);
       } },
-                        value);
-    }
-    return nullptr;
+                      value);
   }
 
   cJSON *to_json(const std::map<const char *, cjf::param *> &params)
@@ -77,8 +73,8 @@ namespace cjf
     {
       return value.error();
     }
-    param.set(*value);
-    return ESP_OK;
+    param_error err = param.set(*value);
+    return (err == param_error::ok) ? ESP_OK : ESP_ERR_INVALID_ARG;
   }
 
   esp_err_t from_json(const std::map<const char *, param *> &params, const cJSON *json)
