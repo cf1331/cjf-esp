@@ -3,6 +3,7 @@
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <functional>
 
 namespace cjf
 {
@@ -30,6 +31,12 @@ namespace cjf
         const char *name,
         uint16_t stack_depth,
         void *params,
+        UBaseType_t priority);
+
+    static task_controller create_task(
+        const std::function<void(void)> &task_func,
+        const char *name,
+        uint16_t stack_depth,
         UBaseType_t priority);
 
   private:

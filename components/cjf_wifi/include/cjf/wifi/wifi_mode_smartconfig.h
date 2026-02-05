@@ -18,7 +18,7 @@ namespace cjf
   {
   public:
     static std::expected<wifi_mode_smartconfig, esp_err_t> start(
-        std::shared_ptr<cjf::nvs> nvs);
+        cjf::nvs &nvs);
 
   private:
     struct deleter

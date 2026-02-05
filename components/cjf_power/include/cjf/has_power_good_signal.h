@@ -1,6 +1,7 @@
 #ifndef E299AB45_CDB3_4F6F_ACA3_32FDE0F26E11
 #define E299AB45_CDB3_4F6F_ACA3_32FDE0F26E11
 
+#include <cjf/error_handling.h>
 #include <cjf/gpio.h>
 #include <concepts>
 #include <esp_err.h>
@@ -19,13 +20,19 @@ namespace cjf
       bool good_level = true;
     };
 
-    static std::expected<has_power_good_signal, esp_err_t> init(config_type &config) noexcept
+    static std::expected<has_power_good_signal<PowerGoodPin>, esp_err_t> &init(
+        std::expected<has_power_good_signal<PowerGoodPin>, esp_err_t> &inst,
+        config_type &config) noexcept
     {
       if (!config.power_good_pin)
       {
-        return std::unexpected(config.power_good_pin.error());
+        inst = std::unexpected(config.power_good_pin.error());
       }
-      return has_power_good_signal(config);
+      else
+      {
+        inst.emplace(config);
+      }
+      return inst;
     }
 
     std::expected<bool, esp_err_t> is_power_good() noexcept
@@ -38,7 +45,6 @@ namespace cjf
       return *level == good_level_;
     }
 
-  protected:
     constexpr has_power_good_signal(config_type &config) noexcept
         : power_good_pin_(std::move(*config.power_good_pin)),
           good_level_(config.good_level) {}

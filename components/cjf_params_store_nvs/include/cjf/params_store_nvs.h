@@ -65,7 +65,7 @@ namespace cjf
      * @return params_store_nvs instance or error code
      */
     static std::expected<std::shared_ptr<params_store_nvs>, esp_err_t> open(
-        std::shared_ptr<cjf::nvs> nvs_handle,
+        std::expected<cjf::nvs, esp_err_t> &nvs,
         const char *namespace_name) noexcept;
 
     /**

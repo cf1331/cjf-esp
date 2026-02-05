@@ -13,9 +13,10 @@ namespace cjf
   }
 
   std::expected<std::shared_ptr<params_store_nvs>, esp_err_t> params_store_nvs::open(
-      std::shared_ptr<cjf::nvs> nvs,
+      std::expected<cjf::nvs, esp_err_t> &nvs,
       const char *namespace_name) noexcept
   {
+    RETURN_ON_UNEXPECTED(nvs, TAG);
     auto ns = nvs->open(namespace_name, NVS_READWRITE);
     RETURN_ON_UNEXPECTED(ns, TAG, "Failed to open NVS namespace: %s, error: %s", namespace_name, esp_err_to_name(ns.error()));
 

@@ -14,7 +14,7 @@ namespace cjf
   class wifi_mode_sta
   {
   public:
-    static std::expected<wifi_mode_sta, esp_err_t> start(std::shared_ptr<cjf::nvs> nvs);
+    static std::expected<wifi_mode_sta, esp_err_t> start(cjf::nvs &nvs);
 
     esp_err_t connect() const;
     esp_err_t disconnect() const;
@@ -27,12 +27,12 @@ namespace cjf
 
     cjf::event_handler event_handler_;
     std::unique_ptr<esp_netif_t, deleter> netif_;
-    std::shared_ptr<cjf::nvs> nvs_;
+    std::reference_wrapper<cjf::nvs> nvs_;
 
     wifi_mode_sta(
         cjf::event_handler event_handler,
         std::unique_ptr<esp_netif_t, deleter> netif,
-        std::shared_ptr<cjf::nvs> nvs);
+        std::reference_wrapper<cjf::nvs> nvs);
   };
 
 } // namespace cjf

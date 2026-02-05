@@ -203,7 +203,7 @@ namespace cjf
             *this,
             reinterpret_cast<const uint8_t *>(&reg_address),
             sizeof(RegAddressType),
-            value.data(),
+            reinterpret_cast<uint8_t *>(value.data()),
             value.size(),
             timeout_ms);
         ESP_LOG_BUFFER_HEX_LEVEL(I2C_DEVICE_TAG, value.data(), value.size(), ESP_LOG_DEBUG);

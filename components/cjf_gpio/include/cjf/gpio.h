@@ -75,7 +75,7 @@ namespace cjf
     esp_err_t set_drive_capability(gpio_drive_cap_t strength) const;
     esp_err_t set_pull_mode(gpio_pull_mode_t pull) const;
 
-    inline std::weak_ptr<void> device() const noexcept { return {}; }
+    constexpr void* device() const noexcept { return nullptr; }
 
     // Device interface
     constexpr bool supports_atomic_writes() const noexcept { return true; }

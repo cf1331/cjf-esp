@@ -27,6 +27,26 @@ namespace cjf
     return task_controller(handle);
   }
 
+  task_controller task_controller::create_task(
+      const std::function<void(void)> &task_func,
+      const char *name,
+      uint16_t stack_depth,
+      UBaseType_t priority)
+  {
+    auto task_wrapper = [](void *params)
+    {
+      auto *task_func = reinterpret_cast<std::function<void(void)> *>(params);
+      (*task_func)();
+      vTaskDelete(nullptr);
+    };
+    return create_task(
+        task_wrapper,
+        name,
+        stack_depth,
+        static_cast<void *>(const_cast<std::function<void(void)> *>(&task_func)),
+        priority);
+  }
+
   // Start the task's work loop
   void task_controller::start()
   {

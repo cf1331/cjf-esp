@@ -51,7 +51,7 @@ namespace cjf
     }
   }
 
-  std::expected<wifi_mode_sta, esp_err_t> wifi_mode_sta::start(std::shared_ptr<cjf::nvs> nvs)
+  std::expected<wifi_mode_sta, esp_err_t> wifi_mode_sta::start(cjf::nvs &nvs)
   {
     ESP_LOGW(TAG, "Starting sta mode");
     auto event_handler = cjf::event_handler::create(
@@ -64,7 +64,7 @@ namespace cjf
     RETURN_UNEXPECTED_ON_FALSE(netif, ESP_ERR_NO_MEM, TAG);
     RETURN_UNEXPECTED_ON_ERROR(esp_wifi_set_mode(WIFI_MODE_STA), TAG);
     RETURN_UNEXPECTED_ON_ERROR(esp_wifi_start(), TAG);
-    return wifi_mode_sta(std::move(*event_handler), std::move(netif), nvs);
+    return wifi_mode_sta(std::move(*event_handler), std::move(netif), std::ref(nvs));
   }
 
   void wifi_mode_sta::deleter::operator()(esp_netif_t *netif) const noexcept
@@ -82,10 +82,10 @@ namespace cjf
   wifi_mode_sta::wifi_mode_sta(
       cjf::event_handler event_handler,
       std::unique_ptr<esp_netif_t, deleter> netif,
-      std::shared_ptr<cjf::nvs> nvs)
+      std::reference_wrapper<cjf::nvs> nvs)
       : event_handler_(std::move(event_handler)),
         netif_(std::move(netif)),
-        nvs_(std::move(nvs)) {}
+        nvs_(nvs) {}
 
   esp_err_t wifi_mode_sta::connect() const
   {

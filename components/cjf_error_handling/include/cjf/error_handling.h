@@ -1,3 +1,4 @@
+
 #ifndef F71A9988_B330_430E_A40E_9E585BBA5F2C
 #define F71A9988_B330_430E_A40E_9E585BBA5F2C
 
@@ -139,6 +140,24 @@ namespace cjf
   } while (0)
 
 /**
+ * Macro to check a `std::expected` value, log an error message, set the target to
+ * std::unexpected with the error, and return a reference to the target if it contains an error.
+ *
+ * The error message will contain the function name, line number and error name.
+ * An optional fourth argument can be provided to include a custom message.
+ */
+#define SET_AND_RETURN_ON_UNEXPECTED(target, value, log_tag, ...)       \
+  do                                                                    \
+  {                                                                     \
+    if (!value)                                                         \
+    {                                                                   \
+      __LOG_ERROR_WITH_EXPECTED(log_tag, value, ##__VA_ARGS__);         \
+      target = std::unexpected(value.error());                          \
+      return target;                                                    \
+    }                                                                   \
+  } while (0)
+
+/**
  * Macro to check an `esp_err_t` value, log an error message and return the
  * value if it is not `ESP_OK`.
  *
@@ -238,17 +257,17 @@ namespace cjf
  *
  * An optional fourth argument can be provided to log an error message.
  */
-#define RETURN_UNEXPECTED_ON_FALSE(value, unexpected_value, log_tag, ...)  \
-  do                                                                       \
-  {                                                                        \
-    if (unlikely(!(value)))                                                \
-    {                                                                      \
-      if (sizeof("" #__VA_ARGS__) > 1)                                     \
-      {                                                                    \
-        ESP_LOGE(log_tag, __VA_ARGS__ " (%s:%d)", __FUNCTION__, __LINE__); \
-      }                                                                    \
-      return std::unexpected(unexpected_value);                            \
-    }                                                                      \
+#define RETURN_UNEXPECTED_ON_FALSE(value, unexpected_value, log_tag, ...) \
+  do                                                                      \
+  {                                                                       \
+    if (unlikely(!(value)))                                               \
+    {                                                                     \
+      if (sizeof("" #__VA_ARGS__) > 1)                                    \
+      {                                                                   \
+        __LOG_ERROR_WITH_CODE(log_tag, unexpected_value, ##__VA_ARGS__);  \
+      }                                                                   \
+      return std::unexpected(unexpected_value);                           \
+    }                                                                     \
   } while (0)
 
 /**
@@ -256,17 +275,17 @@ namespace cjf
  *
  * An optional third argument can be provided to log an error message.
  */
-#define RETURN_ERROR_ON_FALSE(value, error_code, log_tag, ...)             \
-  do                                                                       \
-  {                                                                        \
-    if (unlikely(!(value)))                                                \
-    {                                                                      \
-      if (sizeof("" #__VA_ARGS__) > 1)                                     \
-      {                                                                    \
-        ESP_LOGE(log_tag, __VA_ARGS__ " (%s:%d)", __FUNCTION__, __LINE__); \
-      }                                                                    \
-      return error_code;                                                   \
-    }                                                                      \
+#define RETURN_ERROR_ON_FALSE(value, error_code, log_tag, ...)     \
+  do                                                               \
+  {                                                                \
+    if (unlikely(!(value)))                                        \
+    {                                                              \
+      if (sizeof("" #__VA_ARGS__) > 1)                             \
+      {                                                            \
+        __LOG_ERROR_WITH_CODE(log_tag, error_code, ##__VA_ARGS__); \
+      }                                                            \
+      return error_code;                                           \
+    }                                                              \
   } while (0)
 
 /**
@@ -274,20 +293,20 @@ namespace cjf
  *
  * An optional third argument can be provided to log an error message.
  */
-#define CONTINUE_ON_FALSE(value, log_tag, ...)                             \
-  if (1)                                                                   \
-  {                                                                        \
-    if (unlikely(!(value)))                                                \
-    {                                                                      \
-      if (sizeof("" #__VA_ARGS__) > 1)                                     \
-      {                                                                    \
-        ESP_LOGE(log_tag, __VA_ARGS__ " (%s:%d)", __FUNCTION__, __LINE__); \
-      }                                                                    \
-      continue;                                                            \
-    }                                                                      \
-  }                                                                        \
-  else                                                                     \
-  {                                                                        \
+#define CONTINUE_ON_FALSE(value, log_tag, ...) \
+  if (1)                                       \
+  {                                            \
+    if (unlikely(!(value)))                    \
+    {                                          \
+      if (sizeof("" #__VA_ARGS__) > 1)         \
+      {                                        \
+        ESP_LOGE(log_tag, __VA_ARGS__);        \
+      }                                        \
+      continue;                                \
+    }                                          \
+  }                                            \
+  else                                         \
+  {                                            \
   }
 
 /**
@@ -295,20 +314,20 @@ namespace cjf
  *
  * An optional third argument can be provided to log an error message.
  */
-#define BREAK_ON_FALSE(value, log_tag, ...)                                \
-  if (1)                                                                   \
-  {                                                                        \
-    if (unlikely(!(value)))                                                \
-    {                                                                      \
-      if (sizeof("" #__VA_ARGS__) > 1)                                     \
-      {                                                                    \
-        ESP_LOGE(log_tag, __VA_ARGS__ " (%s:%d)", __FUNCTION__, __LINE__); \
-      }                                                                    \
-      break;                                                               \
-    }                                                                      \
-  }                                                                        \
-  else                                                                     \
-  {                                                                        \
+#define BREAK_ON_FALSE(value, log_tag, ...) \
+  if (1)                                    \
+  {                                         \
+    if (unlikely(!(value)))                 \
+    {                                       \
+      if (sizeof("" #__VA_ARGS__) > 1)      \
+      {                                     \
+        ESP_LOGE(log_tag, __VA_ARGS__);     \
+      }                                     \
+      break;                                \
+    }                                       \
+  }                                         \
+  else                                      \
+  {                                         \
   }
 
 } // namespace cjf

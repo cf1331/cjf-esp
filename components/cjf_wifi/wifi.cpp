@@ -10,7 +10,7 @@ static const char *TAG = "cjf:wifi";
 
 namespace cjf
 {
-  std::expected<wifi, esp_err_t> wifi::init(std::shared_ptr<cjf::nvs> nvs)
+  std::expected<wifi, esp_err_t> wifi::init(std::expected<cjf::nvs, esp_err_t> &nvs)
   {
     ESP_LOGI(TAG, "Initializing wifi");
 
@@ -21,6 +21,7 @@ namespace cjf
     {
       RETURN_UNEXPECTED_ON_ERROR(res, TAG);
     }
+    RETURN_ON_UNEXPECTED(nvs, TAG);
 
     cjf::scope_guard<deleter> cleanup;
     RETURN_UNEXPECTED_ON_ERROR(esp_netif_init(), TAG);
@@ -28,11 +29,11 @@ namespace cjf
     RETURN_UNEXPECTED_ON_ERROR(esp_wifi_init(&cfg), TAG);
 
     ESP_LOGI(TAG, "Initialized wifi");
-    return wifi(std::move(cleanup), std::move(nvs));
+    return wifi(std::move(cleanup), std::ref(*nvs));
   }
 
-  wifi::wifi(cjf::scope_guard<deleter> cleanup, std::shared_ptr<cjf::nvs> nvs)
-      : cleanup_(std::move(cleanup)), mode_(std::nullopt), nvs_(std::move(nvs)) {}
+  wifi::wifi(cjf::scope_guard<deleter> cleanup, std::reference_wrapper<cjf::nvs> nvs)
+      : cleanup_(std::move(cleanup)), mode_(std::nullopt), nvs_(nvs) {}
 
   void wifi::deleter::operator()() const noexcept
   {
@@ -45,7 +46,7 @@ namespace cjf
   esp_err_t wifi::connect()
   {
     disconnect();
-    auto sta = wifi_mode_sta::start(nvs_);
+    auto sta = wifi_mode_sta::start(nvs_.get());
     RETURN_ERROR_ON_UNEXPECTED(sta, TAG);
     sta->connect();
     return change_mode_(std::move(sta));
@@ -64,7 +65,7 @@ namespace cjf
   esp_err_t wifi::provision()
   {
     disconnect();
-    return change_mode_(wifi_mode_smartconfig::start(nvs_));
+    return change_mode_(wifi_mode_smartconfig::start(nvs_.get()));
   }
 
   esp_err_t wifi::soft_ap(const char *ssid, const char *password)

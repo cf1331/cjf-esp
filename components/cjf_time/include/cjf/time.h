@@ -58,7 +58,7 @@ namespace cjf
    * @param default_tz Default POSIX timezone string to use if none found in NVS
    * @return `ESP_OK` on success, error code on failure
    */
-  esp_err_t load_timezone(std::shared_ptr<cjf::nvs> nvs, const char *default_tz);
+  esp_err_t load_timezone(std::expected<cjf::nvs, esp_err_t> &nvs, const char *default_tz);
 
   /**
    * @brief Set the system timezone

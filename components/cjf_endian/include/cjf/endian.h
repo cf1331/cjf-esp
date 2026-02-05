@@ -77,7 +77,7 @@ namespace cjf
      * @brief Constructor from native value
      * @param value The native value to store in the specified endianness
      */
-    constexpr explicit endian_value(NativeType value) noexcept
+    constexpr endian_value(NativeType value) noexcept
     {
       // Store the value in the native endianness first
       if constexpr (Size > sizeof(NativeType))
@@ -152,6 +152,17 @@ namespace cjf
     constexpr operator NativeType() const noexcept
     {
       return to_native();
+    }
+
+    /**
+     * @brief Assignment from native type
+     * @param value The native value to assign
+     * @return Reference to this object
+     */
+    constexpr endian_value &operator=(NativeType value) noexcept
+    {
+      *this = endian_value(value);
+      return *this;
     }
 
     /**
@@ -441,7 +452,7 @@ namespace cjf
      * @brief Constructor from native value
      * @param value The native value to store
      */
-    constexpr explicit endian_value(NativeType value) noexcept
+    constexpr endian_value(NativeType value) noexcept
         : data_(value)
     {
     }

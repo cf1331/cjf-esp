@@ -8,6 +8,7 @@
 #include <cjf/nvs.h>
 #include <esp_err.h>
 #include <expected>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <variant>
@@ -22,8 +23,7 @@ namespace cjf
         wifi_mode_soft_ap,
         wifi_mode_sta>;
 
-    static std::expected<wifi, esp_err_t> init(
-        std::shared_ptr<cjf::nvs> nvs);
+    static std::expected<wifi, esp_err_t> init(std::expected<cjf::nvs, esp_err_t> &nvs);
 
     // Move-only semantics to prevent copying
     wifi(const wifi &) = delete;
@@ -47,9 +47,9 @@ namespace cjf
 
     cjf::scope_guard<deleter> cleanup_;
     std::optional<mode_type> mode_;
-    std::shared_ptr<cjf::nvs> nvs_;
+    std::reference_wrapper<cjf::nvs> nvs_;
 
-    explicit wifi(cjf::scope_guard<deleter> cleanup, std::shared_ptr<cjf::nvs> nvs);
+    explicit wifi(cjf::scope_guard<deleter> cleanup, std::reference_wrapper<cjf::nvs> nvs);
 
     esp_err_t change_mode_(mode_type &&new_mode);
     esp_err_t change_mode_(std::expected<mode_type, esp_err_t> new_mode);

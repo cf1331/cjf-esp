@@ -18,7 +18,7 @@ namespace cjf
     return ESP_OK;
   }
 
-  esp_err_t load_timezone(std::shared_ptr<nvs> nvs, const char *default_tz)
+  esp_err_t load_timezone(std::expected<cjf::nvs, esp_err_t> &nvs, const char *default_tz)
   {
     RETURN_ERROR_ON_FALSE(nvs, ESP_ERR_INVALID_ARG, CJF_TIME, "nvs not initialized");
     char tz[64] = {0};
