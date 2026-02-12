@@ -3,8 +3,6 @@
 
 namespace cjf
 {
-  static const char *CJF_STATUS_LED = "cjf::status_led";
-
   void set_pixel(led_strip &strip, const size_t pixel_num, const cjf::color &color)
   {
     std::visit(
