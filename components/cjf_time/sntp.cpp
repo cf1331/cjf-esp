@@ -7,9 +7,7 @@ namespace cjf
 {
   const char *CJF_SNTP = "cjf:sntp";
 
-  std::unique_ptr<sntp_service> sntp_service::instance_;
-
-  std::expected<std::unique_ptr<sntp_service>, esp_err_t> sntp_service::start()
+  std::expected<sntp_service, esp_err_t> sntp_service::start()
   {
     return start(sntp_service::config<1>{
         .servers = { default_server }});
