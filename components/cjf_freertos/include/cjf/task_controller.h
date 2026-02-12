@@ -26,6 +26,10 @@ namespace cjf
     // Check if a stop notification was received (non-blocking)
     bool should_run();
 
+    // Start the task's work loop from ISR context
+    // Returns true if higher priority task was woken
+    bool start_from_isr();
+
     static task_controller create_task(
         TaskFunction_t task_func,
         const char *name,

@@ -88,25 +88,31 @@ namespace cjf
     LOG_IF_ERROR(gpio_reset_pin(static_cast<gpio_num_t>(gpio_num)), CJF_GPIO);
   }
 
-  std::expected<gpio_isr_service, esp_err_t> gpio_isr_service::install()
+  std::expected<gpio_isr_service, esp_err_t> gpio_isr_service::init() noexcept
   {
     RETURN_UNEXPECTED_ON_ERROR(gpio_install_isr_service(0), CJF_GPIO);
+    ESP_LOGI(CJF_GPIO, "GPIO ISR service installed");
     return gpio_isr_service();
   }
 
-  esp_err_t gpio_isr_service::add_handler(gpio_num_t gpio_num, gpio_isr_t isr_handler, void *args)
+  void gpio_isr_service::handler_deleter::operator()() const noexcept
   {
-    return gpio_isr_handler_add(gpio_num, isr_handler, args);
+    LOG_IF_ERROR(gpio_isr_handler_remove(gpio_num), CJF_GPIO);
+    ESP_LOGI(CJF_GPIO, "GPIO ISR handler removed for GPIO %d", gpio_num);
   }
 
-  esp_err_t gpio_isr_service::remove_handler(gpio_num_t gpio_num)
+  std::expected<gpio_isr_service::handler_type, esp_err_t> gpio_isr_service::add_handler(
+      gpio_num_t gpio_num, gpio_isr_t isr_handler, void *args)
   {
-    return gpio_isr_handler_remove(gpio_num);
+    RETURN_UNEXPECTED_ON_ERROR(gpio_isr_handler_add(gpio_num, isr_handler, args), CJF_GPIO);
+    ESP_LOGI(CJF_GPIO, "GPIO ISR handler added for GPIO %d", gpio_num);
+    return handler_type({gpio_num});
   }
 
   void gpio_isr_service::deleter::operator()() const noexcept
   {
     gpio_uninstall_isr_service();
+    ESP_LOGI(CJF_GPIO, "GPIO ISR service uninstalled");
   }
 
 } // namespace cjf

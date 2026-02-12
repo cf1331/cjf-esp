@@ -45,7 +45,7 @@ namespace cjf
    * @endcode
    */
   template <typename Deleter>
-    requires std::is_default_constructible_v<Deleter> && std::is_invocable_v<Deleter>
+    requires std::is_invocable_v<Deleter>
   class scope_guard
   {
   public:
@@ -53,8 +53,21 @@ namespace cjf
      * @brief Construct an owning scope guard
      *
      * Creates a scope guard that will invoke the deleter on destruction.
+     * Uses a default-constructed deleter.
      */
-    scope_guard() noexcept : is_owner_(true) {}
+    scope_guard() noexcept 
+      requires std::is_default_constructible_v<Deleter>
+      : is_owner_(true), deleter_() {}
+
+    /**
+     * @brief Construct an owning scope guard with a deleter instance
+     *
+     * Creates a scope guard that will invoke the provided deleter on destruction.
+     *
+     * @param deleter The deleter instance to invoke on cleanup
+     */
+    explicit scope_guard(Deleter deleter) noexcept
+      : is_owner_(true), deleter_(std::move(deleter)) {}
 
     // Move-only semantics: Each `scope_guard` represents exclusive ownership of a
     // cleanup action. Copying would create multiple owners that would invoke the
@@ -71,7 +84,8 @@ namespace cjf
      * @param other The source scope guard to move from
      */
     scope_guard(scope_guard &&other) noexcept
-        : is_owner_(std::exchange(other.is_owner_, false))
+        : is_owner_(std::exchange(other.is_owner_, false)),
+          deleter_(std::move(other.deleter_))
     {
     }
 
@@ -90,6 +104,7 @@ namespace cjf
       {
         cleanup_if_owner();
         is_owner_ = std::exchange(other.is_owner_, false);
+        deleter_ = std::move(other.deleter_);
       }
       return *this;
     }
@@ -138,6 +153,7 @@ namespace cjf
 
   private:
     bool is_owner_;
+    Deleter deleter_;
 
     /**
      * @brief Internal helper to conditionally invoke cleanup
@@ -146,7 +162,7 @@ namespace cjf
     {
       if (is_owner())
       {
-        Deleter()();
+        deleter_();
       }
     }
   };

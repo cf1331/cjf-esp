@@ -80,4 +80,12 @@ namespace cjf
     return true;
   }
 
+  bool task_controller::start_from_isr()
+  {
+    if (!task_handle) return false;
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    xTaskNotifyFromISR(task_handle, 1, eSetValueWithOverwrite, &xHigherPriorityTaskWoken);
+    return xHigherPriorityTaskWoken == pdTRUE;
+  }
+
 } // namespace cjf

@@ -119,11 +119,17 @@ namespace cjf
   class gpio_isr_service
   {
   public:
-    // Factory: installs the ISR service and returns an owning instance on success
-    static std::expected<gpio_isr_service, esp_err_t> install();
+    struct handler_deleter {
+      gpio_num_t gpio_num;
+      void operator()() const noexcept;
+    };
 
-    esp_err_t add_handler(gpio_num_t gpio_num, gpio_isr_t isr_handler, void *args = nullptr);
-    esp_err_t remove_handler(gpio_num_t gpio_num);
+    using handler_type = cjf::scope_guard<handler_deleter>;
+
+    // Factory: installs the ISR service and returns an owning instance on success
+    static std::expected<gpio_isr_service, esp_err_t> init() noexcept;
+
+    std::expected<gpio_isr_service::handler_type, esp_err_t> add_handler(gpio_num_t gpio_num, gpio_isr_t isr_handler, void *args = nullptr);
 
   private:
     struct deleter
