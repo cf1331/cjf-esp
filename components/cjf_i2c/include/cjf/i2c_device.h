@@ -195,7 +195,7 @@ namespace cjf
     {
       ValueType value;
       esp_err_t err;
-      ESP_LOGD(I2C_DEVICE_TAG, "Reading from register: 0x%x", reg_address);
+      ESP_LOGD(I2C_DEVICE_TAG, "0x%02x read reg 0x%02x", this->address(), reg_address);
       if constexpr (requires { value.data(); value.size(); })
       {
         // ValueType has data() and size() methods (register types)
@@ -236,7 +236,7 @@ namespace cjf
     template <RegAddressType RegAddress, typename ValueType>
     esp_err_t write(
         const reg_wo<RegAddress, ValueType> reg,
-        const auto& value,
+        const auto &value,
         const int32_t timeout_ms = -1) const
       requires std::constructible_from<ValueType, std::decay_t<decltype(value)>>
     {
@@ -255,7 +255,7 @@ namespace cjf
     template <RegAddressType RegAddress, typename ValueType>
     esp_err_t write(
         const reg_rw<RegAddress, ValueType> reg,
-        const auto& value,
+        const auto &value,
         const int32_t timeout_ms = -1) const
       requires std::constructible_from<ValueType, std::decay_t<decltype(value)>>
     {
@@ -277,11 +277,11 @@ namespace cjf
     template <RegAddressType RegAddress, typename ValueType>
     esp_err_t write(
         const reg_rw<RegAddress, ValueType> reg,
-        const auto& mask,
-        const auto& value,
+        const auto &mask,
+        const auto &value,
         const int32_t timeout_ms = -1) const
       requires std::constructible_from<ValueType, std::decay_t<decltype(mask)>> &&
-               std::constructible_from<ValueType, std::decay_t<decltype(value)>>
+        std::constructible_from<ValueType, std::decay_t<decltype(value)>>
     {
       return write<ValueType>(reg.address, ValueType(mask), ValueType(value), timeout_ms);
     }
@@ -306,6 +306,8 @@ namespace cjf
            .buffer_size = sizeof(reg_address)},
           {.write_buffer = reinterpret_cast<uint8_t *>(&value),
            .buffer_size = sizeof(ValueType)}};
+      ESP_LOGD(I2C_DEVICE_TAG, "0x%02x write reg 0x%02x", this->address(), reg_address);
+      ESP_LOG_BUFFER_HEX_LEVEL(I2C_DEVICE_TAG, &value, sizeof(ValueType), ESP_LOG_DEBUG);
       esp_err_t err = i2c_master_multi_buffer_transmit(
           *this,
           buffers,
