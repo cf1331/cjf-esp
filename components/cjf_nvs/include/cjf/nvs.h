@@ -18,32 +18,67 @@ namespace cjf
     nvs_namespace(nvs_handle_t handle) noexcept;
 
     esp_err_t commit() const noexcept;
-    esp_err_t erase(const char* key) const noexcept;
+    esp_err_t erase(const char *key) const noexcept;
     esp_err_t erase_all() const noexcept;
 
     template <typename T>
-    std::expected<T, esp_err_t> get_item(const char *key)  const noexcept
+    std::expected<T, esp_err_t> get_item(const char *key) const noexcept
     {
       T value;
       esp_err_t res;
 
-      if constexpr (std::is_same_v<T, uint8_t>) {
+      if constexpr (std::is_same_v<T, uint8_t>)
+      {
         res = nvs_get_u8(handle_.get(), key, &value);
-      } else if constexpr (std::is_same_v<T, int8_t>) {
+      }
+      else if constexpr (std::is_same_v<T, int8_t>)
+      {
         res = nvs_get_i8(handle_.get(), key, &value);
-      } else if constexpr (std::is_same_v<T, uint16_t>) {
+      }
+      else if constexpr (std::is_same_v<T, uint16_t>)
+      {
         res = nvs_get_u16(handle_.get(), key, &value);
-      } else if constexpr (std::is_same_v<T, int16_t>) {
+      }
+      else if constexpr (std::is_same_v<T, int16_t>)
+      {
         res = nvs_get_i16(handle_.get(), key, &value);
-      } else if constexpr (std::is_same_v<T, uint32_t>) {
+      }
+      else if constexpr (std::is_same_v<T, uint32_t>)
+      {
         res = nvs_get_u32(handle_.get(), key, &value);
-      } else if constexpr (std::is_same_v<T, int32_t>) {
+      }
+      else if constexpr (std::is_same_v<T, int32_t>)
+      {
         res = nvs_get_i32(handle_.get(), key, &value);
-      } else if constexpr (std::is_same_v<T, uint64_t>) {
+      }
+      else if constexpr (std::is_same_v<T, uint64_t>)
+      {
         res = nvs_get_u64(handle_.get(), key, &value);
-      } else if constexpr (std::is_same_v<T, int64_t>) {
+      }
+      else if constexpr (std::is_same_v<T, int64_t>)
+      {
         res = nvs_get_i64(handle_.get(), key, &value);
-      } else {
+      }
+      else if constexpr (std::is_same_v<T, bool>)
+      {
+        uint8_t v = 0;
+        res = nvs_get_u8(handle_.get(), key, &v);
+        value = !!v;
+      }
+      else if constexpr (std::is_same_v<T, float>)
+      {
+        uint32_t v = 0;
+        res = nvs_get_u32(handle_.get(), key, &v);
+        value = std::bit_cast<float>(v);
+      }
+      else if constexpr (std::is_same_v<T, double>)
+      {
+        uint64_t v = 0;
+        res = nvs_get_u64(handle_.get(), key, &v);
+        value = std::bit_cast<double>(v);
+      }
+      else
+      {
         return std::unexpected(ESP_ERR_INVALID_SIZE);
       }
 
@@ -84,6 +119,21 @@ namespace cjf
       else if constexpr (std::is_same_v<T, int64_t>)
       {
         return nvs_set_i64(handle_.get(), key, value);
+      }
+      else if constexpr (std::is_same_v<T, bool>)
+      {
+        uint8_t v = value ? 1 : 0;
+        return nvs_set_u8(handle_.get(), key, v);
+      }
+      else if constexpr (std::is_same_v<T, float>)
+      {
+        uint32_t v = std::bit_cast<uint32_t>(value);
+        return nvs_set_u32(handle_.get(), key, v);
+      }
+      else if constexpr (std::is_same_v<T, double>)
+      {
+        uint64_t v = std::bit_cast<uint64_t>(value);
+        return nvs_set_u64(handle_.get(), key, v);
       }
       else
       {

@@ -7,7 +7,7 @@
 
 namespace cjf
 {
-  const char *TAG = "cjf:sd";
+  static const char *TAG = "cjf:sd";
 
   std::expected<sd, esp_err_t> sd::mount(const config_type &config)
   {

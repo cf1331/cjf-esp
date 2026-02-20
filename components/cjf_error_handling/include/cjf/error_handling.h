@@ -51,6 +51,21 @@ namespace cjf
     }                                                         \
   } while (0)
 
+/**
+ * Macro to check a `std::expected` value and log an error message if it contains an error.
+ *
+ * The error message will contain the function name, line number and error name.
+ * An optional third argument can be provided to include a custom message.
+ */
+#define LOG_IF_UNEXPECTED(value, log_tag, ...)                  \
+  do                                                            \
+  {                                                             \
+    if (!value)                                                 \
+    {                                                           \
+      __LOG_ERROR_WITH_EXPECTED(log_tag, value, ##__VA_ARGS__); \
+    }                                                           \
+  } while (0)
+
 #define BREAK_ON_ERROR(value, log_tag, ...)                   \
   if (1)                                                      \
   {                                                           \
@@ -146,15 +161,15 @@ namespace cjf
  * The error message will contain the function name, line number and error name.
  * An optional fourth argument can be provided to include a custom message.
  */
-#define SET_AND_RETURN_ON_UNEXPECTED(target, value, log_tag, ...)       \
-  do                                                                    \
-  {                                                                     \
-    if (!value)                                                         \
-    {                                                                   \
-      __LOG_ERROR_WITH_EXPECTED(log_tag, value, ##__VA_ARGS__);         \
-      target = std::unexpected(value.error());                          \
-      return target;                                                    \
-    }                                                                   \
+#define SET_AND_RETURN_ON_UNEXPECTED(target, value, log_tag, ...) \
+  do                                                              \
+  {                                                               \
+    if (!value)                                                   \
+    {                                                             \
+      __LOG_ERROR_WITH_EXPECTED(log_tag, value, ##__VA_ARGS__);   \
+      target = std::unexpected(value.error());                    \
+      return target;                                              \
+    }                                                             \
   } while (0)
 
 /**
@@ -328,6 +343,12 @@ namespace cjf
   }                                         \
   else                                      \
   {                                         \
+  }
+
+  template <typename T>
+  inline const char *unexpected_to_name(const std::expected<T, esp_err_t> &unexpected)
+  {
+    return esp_err_to_name(unexpected.error());
   }
 
 } // namespace cjf

@@ -10,12 +10,13 @@
  * configuration management, network serialization, and value binding scenarios.
  */
 
-#include <cjf/string.h>
 #include <charconv>
+#include <cjf/string.h>
 #include <cstdint>
 #include <expected>
-#include <string>
+#include <magic_enum/magic_enum.hpp>
 #include <optional>
+#include <string>
 #include <variant>
 
 namespace cjf
@@ -30,10 +31,15 @@ namespace cjf
    */
   enum param_error
   {
-    ok = 0,           ///< Operation succeeded
-    read_only,        ///< Attempted to modify a read-only parameter
-    invalid_cast,     ///< Type conversion failed (e.g., "abc" to int)
-    out_of_range,     ///< Value outside valid range for target type
+    ok = 0,       ///< Operation succeeded
+    read_only,    ///< Attempted to modify a read-only parameter
+    invalid_cast, ///< Type conversion failed (e.g., "abc" to int)
+    out_of_range, ///< Value outside valid range for target type
+  };
+
+  [[nodiscard]] constexpr auto param_error_to_name(param_error err)
+  {
+    return magic_enum::enum_name(err);
   };
 
   /**
@@ -314,7 +320,7 @@ namespace cjf
   }
 
   template <typename T>
-  param_error try_set_from_param(T& target, const param& source)
+  param_error try_set_from_param(T &target, const param &source)
   {
     auto value = source.get_as<T>();
     if (!value)

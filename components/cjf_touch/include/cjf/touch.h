@@ -19,6 +19,11 @@ namespace cjf
     static std::expected<touch_controller, esp_err_t> init(
         const config_type &config) noexcept;
 
+    touch_controller(const touch_controller &) = delete;
+    touch_controller &operator=(const touch_controller &) = delete;
+    touch_controller(touch_controller &&) noexcept = default;
+    touch_controller &operator=(touch_controller &&) noexcept = default;
+
     esp_err_t reconfigure(const config_type &config) noexcept;
 
     operator touch_sensor_handle_t() const noexcept;
@@ -44,6 +49,11 @@ namespace cjf
         touch_controller &controller,
         const int channel_id,
         const config_type &config) noexcept;
+
+    touch_channel(const touch_channel &) = delete;
+    touch_channel &operator=(const touch_channel &) = delete;
+    touch_channel(touch_channel &&) noexcept = default;
+    touch_channel &operator=(touch_channel &&) noexcept = default;
 
     int32_t channel_id() const noexcept;
 

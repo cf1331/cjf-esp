@@ -13,6 +13,7 @@
 #include <esp_log.h>
 #include <expected>
 #include <memory>
+#include <magic_enum/magic_enum.hpp>
 #include <optional>
 #include <string>
 #include <vector>
@@ -52,7 +53,8 @@ namespace cjf
   {
   public:
     // Passkey idiom - allows make_shared to call constructor, but external code cannot
-    struct passkey {
+    struct passkey
+    {
     private:
       passkey() = default;
       friend class params_store_nvs;
@@ -154,12 +156,12 @@ namespace cjf
     struct save_on_change_ctx
     {
       std::weak_ptr<params_store_nvs> self;
-      std::string key;  // Own the key string to ensure lifetime
+      std::string key; // Own the key string to ensure lifetime
     };
 
     static const char *TAG;
     nvs_namespace ns_;
-    std::vector<std::unique_ptr<save_on_change_ctx>> watch_contexts_;  // Auto-cleanup contexts
+    std::vector<std::unique_ptr<save_on_change_ctx>> watch_contexts_; // Auto-cleanup contexts
   };
 
   // Template implementations
@@ -170,23 +172,15 @@ namespace cjf
     if constexpr (std::is_same_v<T, std::string>)
     {
       auto str = ns_.get_string(key);
-      RETURN_ERROR_ON_UNEXPECTED(str, TAG, "Failed to load value for key: %s", key);
+      if (!str) return str.error();
       param.set(*str);
       ESP_LOGI(TAG, "%s = %s (loaded)", key, str->c_str());
-      return ESP_OK;
-    }
-    else if constexpr (std::is_floating_point_v<T>)
-    {
-      T value;
-      RETURN_ON_ERROR(ns_.get_blob(key, &value, sizeof(T)), TAG, "Failed to load value for key: %s", key);
-      param.set(value);
-      ESP_LOGI(TAG, "%s = %s (loaded)", key, param.get_as<std::string>().value_or("").c_str());
       return ESP_OK;
     }
     else
     {
       auto value = ns_.get_item<T>(key);
-      RETURN_ERROR_ON_UNEXPECTED(value, TAG, "Failed to load value for key: %s", key);
+      if (!value) return value.error();
       param.set(*value);
       ESP_LOGI(TAG, "%s = %s (loaded)", key, param.get_as<std::string>().value_or("").c_str());
       return ESP_OK;
@@ -201,7 +195,7 @@ namespace cjf
     {
       param.set(default_value);
       ESP_LOGI(TAG, "%s = %s (default)", key, param.get_as<std::string>().value_or("").c_str());
-      return ESP_OK;
+      err = ESP_OK; // Not finding the key is OK when we have a default
     }
     return err;
   }
@@ -224,12 +218,16 @@ namespace cjf
   {
     esp_err_t err;
 
-    // If param has a value, use it as the default; otherwise just try to load
+    // If param has a value, use it as the default and try to load from nvs
     if (param.has_value())
     {
       auto default_value = param.get_as<T>();
-      RETURN_ERROR_ON_UNEXPECTED(default_value, TAG,
-                                 "Failed to get param value for default for key: %s", key);
+      if (!default_value)
+      {
+        auto err_name = param_error_to_name(default_value.error());
+        ESP_LOGE(TAG, "Parameter has value but failed to convert to expected type for key: %s (%.*s)", key, err_name.size(), err_name.data());
+        return ESP_ERR_INVALID_ARG;
+      }
       err = load<T>(key, param, *default_value);
     }
     else
@@ -239,10 +237,10 @@ namespace cjf
       if (err == ESP_ERR_NVS_NOT_FOUND)
       {
         ESP_LOGI(TAG, "%s = null (default)", key);
-        err = ESP_OK;  // Not finding the key is OK when there's no default
+        err = ESP_OK; // Not finding the key is OK when there's no default
       }
     }
-    RETURN_ON_ERROR(err, TAG, "Failed to load value for key: %s", key);
+    RETURN_ON_ERROR(err, TAG, "Failed to load value for key: %s (%s)", key, esp_err_to_name(err));
     save_on_change<T>(key, param);
     return ESP_OK;
   }
@@ -258,15 +256,8 @@ namespace cjf
     if constexpr (std::is_same_v<T, std::string>)
     {
       auto value = param.get_as<std::string>();
-
       RETURN_ERROR_ON_UNEXPECTED(value, TAG, "Failed to get string param value for key: %s", key);
       RETURN_ON_ERROR(ns_.set_string(key, value->c_str()), TAG, "Failed to save value for key: %s", key);
-    }
-    else if constexpr (std::is_floating_point_v<T>)
-    {
-      auto value = param.get_as<T>();
-      RETURN_ERROR_ON_UNEXPECTED(value, TAG, "Failed to get floating point param value for key: %s", key);
-      RETURN_ON_ERROR(ns_.set_blob(key, &(*value), sizeof(T)), TAG, "Failed to save value for key: %s", key);
     }
     else
     {
