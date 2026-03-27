@@ -40,7 +40,13 @@ namespace cjf
     ESP_LOGW(TAG, "Destroying wifi instance");
     // Clean up ESP-IDF wifi resources
     LOG_IF_ERROR(esp_wifi_deinit(), TAG);
-    LOG_IF_ERROR(esp_netif_deinit(), TAG);
+    // LWIP doesn't support deinitialization, so `esp_netif_deinit()` always returns ESP_ERR_NOT_SUPPORTED.
+    // @see https://github.com/espressif/esp-idf/issues/4628
+    // @see https://github.com/espressif/esp-idf/issues/1999
+    // @see https://github.com/espressif/esp-idf/issues/12135
+    //
+    // At this stage, Espressif have no intention to fix it.
+    // LOG_IF_ERROR(esp_netif_deinit(), TAG);
   }
 
   esp_err_t wifi::connect()

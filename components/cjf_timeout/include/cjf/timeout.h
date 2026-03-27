@@ -41,7 +41,7 @@ namespace cjf
      *
      * The timeout starts counting immediately from construction.
      */
-    timeout(TickType_t ticks);
+    timeout(const TickType_t ticks);
 
     /**
      * @brief Create a timeout from milliseconds

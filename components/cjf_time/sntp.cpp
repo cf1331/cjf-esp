@@ -13,15 +13,15 @@ namespace cjf
         .servers = { default_server }});
   }
 
-  sntp_service::sntp_service()
-  {
-    ESP_LOGI(CJF_SNTP, "SNTP service started");
-  }
-
-  sntp_service::~sntp_service()
+  void sntp_service::deleter::operator()() const noexcept
   {
     esp_netif_sntp_deinit();
     ESP_LOGI(CJF_SNTP, "SNTP service stopped");
+  }
+
+  sntp_service::sntp_service()
+  {
+    ESP_LOGI(CJF_SNTP, "SNTP service started");
   }
 
   esp_err_t sntp_service::sync()

@@ -20,13 +20,14 @@ namespace cjf
       const led_strip_rmt_config_t &rmt_config,
       const led_strip_config_t &strip_config)
   {
-    led_strip_handle_t handle = nullptr;
-    RETURN_UNEXPECTED_ON_ERROR(led_strip_new_rmt_device(&strip_config, &rmt_config, &handle), CJF_LED_STRIP);
-    return led_strip(handle);
+    led_strip_handle_t handle_raw = nullptr;
+    RETURN_UNEXPECTED_ON_ERROR(led_strip_new_rmt_device(&strip_config, &rmt_config, &handle_raw), CJF_LED_STRIP);
+    auto handle = std::unique_ptr<led_strip_t, led_strip_deleter>(handle_raw);
+    return led_strip(std::move(handle));
   }
 
-  led_strip::led_strip(led_strip_handle_t handle) noexcept
-      : handle_(handle) {}
+  led_strip::led_strip(std::unique_ptr<led_strip_t, led_strip_deleter> handle) noexcept
+      : handle_(std::move(handle)) {}
 
   led_strip::operator led_strip_handle_t() const noexcept
   {

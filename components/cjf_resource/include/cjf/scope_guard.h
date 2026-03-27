@@ -55,7 +55,7 @@ namespace cjf
      * Creates a scope guard that will invoke the deleter on destruction.
      * Uses a default-constructed deleter.
      */
-    scope_guard() noexcept 
+    scope_guard() noexcept
       requires std::is_default_constructible_v<Deleter>
       : is_owner_(true), deleter_() {}
 

@@ -155,6 +155,25 @@ namespace cjf
   } while (0)
 
 /**
+ * Macro to check an `esp_err_t` value, log an error message, set the target to
+ * `std::unexpected` with the error, and return a reference to the target if it is not `ESP_OK`.
+ *
+ * The error message will contain the function name, line number and error name.
+ * An optional fourth argument can be provided to include a custom message.
+ */
+#define SET_AND_RETURN_ON_ERROR(target, value, log_tag, ...)  \
+  do                                                          \
+  {                                                           \
+    esp_err_t err_rc_ = (value);                              \
+    if (unlikely(err_rc_ != ESP_OK))                          \
+    {                                                         \
+      __LOG_ERROR_WITH_CODE(log_tag, err_rc_, ##__VA_ARGS__); \
+      target = std::unexpected(err_rc_);                      \
+      return target;                                          \
+    }                                                         \
+  } while (0)
+
+/**
  * Macro to check a `std::expected` value, log an error message, set the target to
  * std::unexpected with the error, and return a reference to the target if it contains an error.
  *

@@ -35,24 +35,46 @@ namespace cjf
     return set_timezone(tz[0] ? tz : default_tz);
   }
 
-  char *to_iso8061(const timeval &tv, char *dst, size_t dst_size)
+  int to_iso8061(const timeval &tv, char *dst, size_t dst_size, const to_iso8061_config &config)
   {
     struct tm timeinfo;
-    localtime_r(&tv.tv_sec, &timeinfo);
-    // Format the main timestamp part
-    size_t len = strftime(dst, dst_size, "%Y-%m-%dT%H:%M:%S", &timeinfo);
+    if (config.utc)
+    {
+      gmtime_r(&tv.tv_sec, &timeinfo);
+    }
+    else
+    {
+      localtime_r(&tv.tv_sec, &timeinfo);
+    }
+    size_t len = 0;
+    // Append date part
+    if (config.date_part)
+    {
+      len += strftime(dst + len, dst_size - len, config.date_part, &timeinfo);
+    }
+    // Append time part
+    if (config.time_part)
+    {
+      len += strftime(dst + len, dst_size - len, config.time_part, &timeinfo);
+    }
     // Append milliseconds part
-    len += snprintf(dst + len, dst_size - len, ".%03ld", tv.tv_usec / 1000);
+    if (config.millis_part)
+    {
+      len += snprintf(dst + len, dst_size - len, config.millis_part, tv.tv_usec / 1000);
+    }
     // Append timezone offset part
-    strftime(dst + len, dst_size - len, "%z", &timeinfo);
-    return dst;
+    if (config.timezone_part)
+    {
+      len += strftime(dst + len, dst_size - len, config.timezone_part, &timeinfo);
+    }
+    return len;
   }
 
-  std::string to_iso8061(const timeval &tv)
+  std::string to_iso8061(const timeval &tv, const to_iso8061_config &config)
   {
     // 29 chars max for ISO 8601 + null terminator
     std::string str(32, '\0');
-    to_iso8061(tv, str.data(), str.size());
+    to_iso8061(tv, str.data(), str.size(), config);
     str.resize(std::strlen(str.c_str())); // Trim to actual string length
     return str;
   }

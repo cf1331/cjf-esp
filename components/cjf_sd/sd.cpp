@@ -61,7 +61,9 @@ namespace cjf
   {
     if (!card)
       return;
-    esp_vfs_fat_sdcard_unmount(mount_point, card);
+    esp_err_t res = esp_vfs_fat_sdcard_unmount(mount_point, card);
+    RETURN_VOID_ON_ERROR(res, TAG, "Failed to unmount SD card from %s: %s", mount_point, esp_err_to_name(res));
+    ESP_LOGI(TAG, "SD card unmounted from %s", mount_point);
   }
 
   sd::sd(card_ptr_type card, const char *mount_point)

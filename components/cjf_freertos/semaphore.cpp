@@ -30,6 +30,16 @@ namespace cjf::freertos
     }
   }
 
+  uint32_t binary_semaphore::count() const noexcept
+  {
+    if (handle_ == nullptr)
+    {
+      return 0;
+    }
+    // uxSemaphoreGetCount returns the count of the semaphore (1 if available, 0 if taken)
+    return uxSemaphoreGetCount(handle_);
+  }
+
   esp_err_t binary_semaphore::take(TickType_t timeout) noexcept
   {
     if (handle_ == nullptr)

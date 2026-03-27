@@ -71,6 +71,15 @@ namespace cjf
    */
   esp_err_t set_timezone(const char *posix_tz);
 
+  struct to_iso8061_config
+  {
+    const char *date_part = "%Y-%m-%d";
+    const char *time_part = "T%H:%M:%S";
+    const char *millis_part = ".%03d";
+    const char *timezone_part = "%z";
+    bool utc = false;
+  };
+
   /**
    * @brief Convert timeval to ISO 8601 string format
    *
@@ -80,9 +89,10 @@ namespace cjf
    * @param tv The timeval structure to convert
    * @param dst Destination buffer to store the ISO 8601 string
    * @param dst_size Size of the destination buffer
-   * @return Pointer to the destination buffer (same as `dst` parameter)
+   * @param config Configuration options for ISO 8601 formatting
+   * @return Number of characters written to the destination buffer
    */
-  char *to_iso8061(const timeval &tv, char *dst, size_t dst_size);
+  int to_iso8061(const timeval &tv, char *dst, size_t dst_size, const to_iso8061_config &config = {});
 
   /**
    * @brief Convert timeval to ISO 8601 string format
@@ -93,7 +103,7 @@ namespace cjf
    * @param tv The timeval structure to convert
    * @return ISO 8601 formatted string representation of the time
    */
-  std::string to_iso8061(const timeval &tv);
+  std::string to_iso8061(const timeval &tv, const to_iso8061_config &config = {});
 
   /**
    * @brief Synchronize system time from a time source
@@ -168,21 +178,18 @@ namespace cjf
    * @return Expected containing event_handler on success, or esp_err_t on failure
    */
   template <time_sink T>
-std::expected<event_handler, esp_err_t> sync_time_on(esp_event_base_t event_base, int32_t event_id, const T &dst, const char *dst_name = "sink") noexcept
+  std::expected<event_handler_2, esp_err_t> &sync_time_on(
+      const esp_event_base_t event_base, const int32_t event_id,
+      const T &dst, const char *dst_name,
+      std::expected<event_handler_2, esp_err_t> &event_handler) noexcept
   {
     static constexpr const char *TAG = "cjf:time";
-    auto event_handler = [](void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
-    {
-      auto ctx = static_cast<sync_time_on_ctx<T> *>(arg);
-      LOG_IF_ERROR(sync_time_to(*ctx->dst, ctx->dst_name), TAG, "Failed to sync time on event");
-    };
-    // clang-format off
-    return event_handler::create_with_managed_arg(
-        event_base, event_id,
-        event_handler,
-        new sync_time_on_ctx<T>{&dst, dst_name},
-        [](void *ptr) { delete static_cast<sync_time_on_ctx<T> *>(ptr); });
-    // clang-format on
+    return event_handler_2::emplace_and_register_with_default_loop(
+        event_handler, event_base, event_id,
+        [&dst, dst_name](esp_event_base_t event_base, int32_t event_id, void *event_data)
+        {
+          LOG_IF_ERROR(sync_time_to(dst, dst_name), TAG, "Failed to sync time on event");
+        });
   }
 
   /**

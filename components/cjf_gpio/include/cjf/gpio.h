@@ -75,7 +75,7 @@ namespace cjf
     esp_err_t set_drive_capability(gpio_drive_cap_t strength) const;
     esp_err_t set_pull_mode(gpio_pull_mode_t pull) const;
 
-    constexpr void* device() const noexcept { return nullptr; }
+    constexpr void *device() const noexcept { return nullptr; }
 
     // Device interface
     constexpr bool supports_atomic_writes() const noexcept { return true; }
@@ -119,7 +119,8 @@ namespace cjf
   class gpio_isr_service
   {
   public:
-    struct handler_deleter {
+    struct handler_deleter
+    {
       gpio_num_t gpio_num;
       void operator()() const noexcept;
     };
@@ -127,7 +128,7 @@ namespace cjf
     using handler_type = cjf::scope_guard<handler_deleter>;
 
     // Factory: installs the ISR service and returns an owning instance on success
-    static std::expected<gpio_isr_service, esp_err_t> init() noexcept;
+    static std::expected<gpio_isr_service, esp_err_t> &start(std::expected<gpio_isr_service, esp_err_t> &inst) noexcept;
 
     std::expected<gpio_isr_service::handler_type, esp_err_t> add_handler(gpio_num_t gpio_num, gpio_isr_t isr_handler, void *args = nullptr);
 

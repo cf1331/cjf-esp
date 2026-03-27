@@ -14,16 +14,16 @@
  * acquires a guard when it needs power. The rail only powers off when the last
  * peripheral releases its guard.
  *
- * Zero heap allocation - the control block lives in the resource itself.
- * Thread-safe via FreeRTOS critical sections, safe for use from ISRs.
+ * Zero heap allocation - the control block uses static FreeRTOS mutex storage.
+ * Thread-safe via FreeRTOS mutex. Not safe for use from ISRs.
  */
 
 #include <atomic>
+#include <cjf/freertos/semaphore.h>
 #include <cstddef>
+#include <expected>
+#include <functional>
 #include <utility>
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
-#include <freertos/portmacro.h>
 
 namespace cjf
 {
@@ -35,7 +35,7 @@ namespace cjf
    * is destroyed (refcount reaches 0), the deactivator is invoked to transition
    * the resource to its inactive state.
    *
-   * Thread-safe via FreeRTOS critical sections, usable from ISRs.
+   * Thread-safe via FreeRTOS mutex. Not usable from ISRs.
    *
    * @tparam Deactivator Functor with `operator()()` taking no arguments.
    *                     Called when the last guard is destroyed.
@@ -69,12 +69,12 @@ namespace cjf
     struct control_block
     {
       std::atomic<uint32_t> refcount{0};
-      portMUX_TYPE spinlock = portMUX_INITIALIZER_UNLOCKED;
+      cjf::freertos::mutex mutex_;
       Deactivator deactivator;
 
       // Constructor with optional deactivator parameter
       explicit control_block(Deactivator deact = Deactivator{}) noexcept
-          : refcount{0}, spinlock(portMUX_INITIALIZER_UNLOCKED), deactivator(std::move(deact)) {}
+          : refcount{0}, deactivator(std::move(deact)) {}
 
       // Control blocks must have stable addresses since shared_guard holds pointers to them.
       // Therefore, they cannot be moved or copied.
@@ -107,6 +107,28 @@ namespace cjf
       return ctrl.refcount.load(std::memory_order_relaxed) == 0;
     }
 
+    template <typename ErrorType>
+    static std::expected<shared_guard, ErrorType> acquire(
+        control_block &ctrl,
+        std::function<std::expected<Deactivator, ErrorType>()> activator)
+    {
+      cjf::freertos::lock_guard lock(ctrl.mutex_);
+      if (ctrl.refcount.load(std::memory_order_relaxed) == 0)
+      {
+        auto result = activator();
+        if (result)
+        {
+          ctrl.deactivator = std::move(*result);
+        }
+        else
+        {
+          return std::unexpected(result.error());
+        }
+      }
+      ctrl.refcount.fetch_add(1, std::memory_order_relaxed);
+      return shared_guard(ctrl, already_locked_t{});
+    }
+
     /**
      * @brief Construct a guard protecting the resource
      *
@@ -119,9 +141,8 @@ namespace cjf
     explicit shared_guard(control_block &ctrl) noexcept
         : ctrl_(&ctrl)
     {
-      taskENTER_CRITICAL(&ctrl_->spinlock);
+      cjf::freertos::lock_guard lock(ctrl_->mutex_);
       ctrl_->refcount.fetch_add(1, std::memory_order_relaxed);
-      taskEXIT_CRITICAL(&ctrl_->spinlock);
     }
 
     /**
@@ -143,9 +164,8 @@ namespace cjf
     {
       if (ctrl_)
       {
-        taskENTER_CRITICAL(&ctrl_->spinlock);
+        cjf::freertos::lock_guard lock(ctrl_->mutex_);
         ctrl_->refcount.fetch_add(1, std::memory_order_relaxed);
-        taskEXIT_CRITICAL(&ctrl_->spinlock);
       }
     }
 
@@ -170,9 +190,8 @@ namespace cjf
         ctrl_ = other.ctrl_;
         if (ctrl_)
         {
-          taskENTER_CRITICAL(&ctrl_->spinlock);
+          cjf::freertos::lock_guard lock(ctrl_->mutex_);
           ctrl_->refcount.fetch_add(1, std::memory_order_relaxed);
-          taskEXIT_CRITICAL(&ctrl_->spinlock);
         }
       }
       return *this;
@@ -280,6 +299,16 @@ namespace cjf
   private:
     control_block *ctrl_ = nullptr;
 
+    struct already_locked_t
+    {
+    };
+
+    // Used by acquire() after it has already incremented refcount under the mutex.
+    explicit shared_guard(control_block &ctrl, already_locked_t) noexcept
+        : ctrl_(&ctrl)
+    {
+    }
+
     /**
      * @brief Internal helper to release the reference
      *
@@ -293,11 +322,12 @@ namespace cjf
         return;
       }
 
-      taskENTER_CRITICAL(&ctrl_->spinlock);
+      cjf::freertos::lock_guard lock(ctrl_->mutex_);
       uint32_t old_refcount = ctrl_->refcount.fetch_sub(1, std::memory_order_relaxed);
-      taskEXIT_CRITICAL(&ctrl_->spinlock);
 
-      // If this was the last reference, invoke the deactivator
+      // If this was the last reference, invoke the deactivator while the mutex
+      // is held. This prevents a concurrent acquire() from re-activating the
+      // resource before deactivation completes.
       if (old_refcount == 1)
       {
         ctrl_->deactivator();

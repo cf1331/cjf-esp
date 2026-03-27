@@ -1,5 +1,6 @@
 #include "cjf/touch.h"
 #include <driver/touch_sens.h>
+#include <magic_enum/magic_enum.hpp>
 
 namespace cjf
 {

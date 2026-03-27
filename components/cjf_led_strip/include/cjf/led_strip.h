@@ -34,7 +34,7 @@ namespace cjf
   private:
     std::unique_ptr<led_strip_t, led_strip_deleter> handle_;
 
-    explicit led_strip(led_strip_handle_t handle) noexcept;
+    explicit led_strip(std::unique_ptr<led_strip_t, led_strip_deleter> handle) noexcept;
   };
 
 } // namespace cjf

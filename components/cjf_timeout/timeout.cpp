@@ -4,7 +4,7 @@
 namespace cjf
 {
 
-  timeout::timeout(TickType_t ticks)
+  timeout::timeout(const TickType_t ticks)
       : start_ticks(xTaskGetTickCount()),
         timeout_ticks(ticks)
   {

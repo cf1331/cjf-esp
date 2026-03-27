@@ -22,6 +22,7 @@
 #include <cjf/freertos/controllable_task.h>
 #include <cjf/freertos/event_group.h>
 #include <cjf/freertos/queue.h>
+#include <cjf/freertos/ring_buffer.h>
 #include <cjf/freertos/semaphore.h>
 #include <cjf/freertos/task.h>
 #include <cjf/freertos/timer.h>

@@ -88,11 +88,14 @@ namespace cjf
     LOG_IF_ERROR(gpio_reset_pin(static_cast<gpio_num_t>(gpio_num)), CJF_GPIO);
   }
 
-  std::expected<gpio_isr_service, esp_err_t> gpio_isr_service::init() noexcept
+  std::expected<gpio_isr_service, esp_err_t> &gpio_isr_service::start(
+      std::expected<gpio_isr_service, esp_err_t> &inst) noexcept
   {
-    RETURN_UNEXPECTED_ON_ERROR(gpio_install_isr_service(0), CJF_GPIO);
-    ESP_LOGI(CJF_GPIO, "GPIO ISR service installed");
-    return gpio_isr_service();
+    esp_err_t res = gpio_install_isr_service(0);
+    SET_AND_RETURN_ON_ERROR(inst, res, CJF_GPIO, "Failed to install GPIO ISR service: %s", esp_err_to_name(res));
+    ESP_LOGI(CJF_GPIO, "GPIO ISR service started");
+    inst.emplace();
+    return inst;
   }
 
   void gpio_isr_service::handler_deleter::operator()() const noexcept

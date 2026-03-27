@@ -72,6 +72,8 @@ namespace cjf
      */
     explicit status_led(LedStrip leds) noexcept;
 
+    ~status_led() noexcept;
+
     // Non-copyable, non-movable (mutex/timer are non-movable)
     status_led(status_led &&) = delete;
     status_led &operator=(status_led &&) = delete;
@@ -126,12 +128,27 @@ namespace cjf
       : leds_(std::move(leds)), mutex_() {}
 
   template <LedStripLike LedStrip>
+  status_led<LedStrip>::~status_led() noexcept
+  {
+    stop_timer();
+    // Block until any running timer callback completes to ensure mode_ and leds_
+    // are not accessed after destruction.
+    freertos::lock_guard lock(mutex_, portMAX_DELAY);
+  }
+
+  template <LedStripLike LedStrip>
   void status_led<LedStrip>::stop_timer() noexcept
   {
     if (timer_)
     {
       timer_->stop();
-      timer_.reset();
+      // Do NOT destroy (timer_.reset()) here. The timer daemon processes
+      // stop/delete commands asynchronously. If we destroy the timer and
+      // immediately create a new one via timer_.emplace(), the new timer
+      // reuses the same StaticTimer_t buffer. The pending delete command
+      // then corrupts the new timer's list items, crashing in vListInsert.
+      // Instead, leave the timer stopped and let schedule_next_tick() reuse
+      // it via set_period(), which also restarts a dormant timer.
     }
   }
 

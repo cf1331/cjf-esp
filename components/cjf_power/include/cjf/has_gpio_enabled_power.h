@@ -32,17 +32,20 @@ namespace cjf
      */
     struct power_off_deactivator
     {
-      has_gpio_enabled_power *resource;
+      has_gpio_enabled_power *resource = nullptr;
 
       void operator()() const noexcept
       {
-        LOG_IF_ERROR(resource->do_power_off(), TAG, "Failed to power off");
+        if (resource)
+        {
+          LOG_IF_ERROR(resource->do_power_off(), TAG, "Failed to power off");
+        }
       }
     };
 
     using power_guard = cjf::shared_guard<power_off_deactivator>;
 
-    static std::expected<has_gpio_enabled_power, esp_err_t>& init(
+    static std::expected<has_gpio_enabled_power, esp_err_t> &init(
         std::expected<has_gpio_enabled_power, esp_err_t> &inst,
         config_type &config) noexcept
     {
@@ -68,13 +71,20 @@ namespace cjf
     [[nodiscard]] std::expected<power_guard, esp_err_t> power_on() noexcept
     {
       // Check if we need to activate the hardware
-      if (power_guard::needs_activation(guard_ctrl_))
-      {
-        RETURN_UNEXPECTED_ON_ERROR(do_power_on(), TAG, "Failed to power on");
-      }
+      return power_guard::template acquire<esp_err_t>(
+          guard_ctrl_,
+          [this]() -> std::expected<power_off_deactivator, esp_err_t>
+          {
+            RETURN_UNEXPECTED_ON_ERROR(do_power_on(), TAG, "Failed to power on");
+            return power_off_deactivator{this};
+          });
+      // if (power_guard::needs_activation(guard_ctrl_))
+      // {
+      //   RETURN_UNEXPECTED_ON_ERROR(do_power_on(), TAG, "Failed to power on");
+      // }
 
-      // Return guard (increments refcount)
-      return power_guard(guard_ctrl_);
+      // // Return guard (increments refcount)
+      // return power_guard(guard_ctrl_);
     }
 
     constexpr has_gpio_enabled_power(config_type &config) noexcept
@@ -83,7 +93,7 @@ namespace cjf
           log_tag_(config.log_tag),
           power_off_delay_(config.power_off_delay),
           power_on_delay_(config.power_on_delay),
-          guard_ctrl_(power_off_deactivator{this}) {}
+          guard_ctrl_() {}
 
   private:
     /**

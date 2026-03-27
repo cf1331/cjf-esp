@@ -11,13 +11,13 @@
 
 #include <array>
 #include <cjf/error_handling.h>
+#include <cjf/scope_guard.h>
 #include <esp_err.h>
 #include <esp_event.h>
 #include <esp_netif.h>
 #include <esp_netif_sntp.h>
 #include <expected>
 #include <freertos/FreeRTOS.h>
-#include <memory>
 
 /**
  * @brief SNTP event types
@@ -119,11 +119,6 @@ namespace cjf
     template <size_t ServersCount = 1>
     static std::expected<sntp_service, esp_err_t> start(const sntp_service::config<ServersCount> &config);
 
-    /**
-     * @brief Destructor - stops and deinitializes the SNTP service
-     */
-    ~sntp_service();
-
     // Move-only semantics: Each sntp_service manages the global SNTP client state.
     // Copying would create multiple managers of the same state, leading to
     // double-cleanup and undefined behavior when services are destroyed.
@@ -156,6 +151,13 @@ namespace cjf
      * @brief Private constructor - use start() factory methods instead
      */
     sntp_service();
+
+    struct deleter
+    {
+      void operator()() const noexcept;
+    };
+
+    cjf::scope_guard<deleter> scope_guard_;
 
     /**
      * @brief Callback invoked when time synchronization completes

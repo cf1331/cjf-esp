@@ -4,4 +4,4 @@ idf_component_register(SRCS "freertos_raii.cpp"
                             "event_group.cpp"
                             "timer.cpp"
                        INCLUDE_DIRS "include"
-                       REQUIRES cjf_error_handling freertos)
+                       REQUIRES cjf_error_handling esp_ringbuf freertos)

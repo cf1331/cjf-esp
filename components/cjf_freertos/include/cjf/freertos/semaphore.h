@@ -29,6 +29,8 @@ namespace cjf::freertos
      */
     explicit binary_semaphore(bool initial_count = false) noexcept;
 
+    uint32_t count() const noexcept;
+
     /**
      * @brief Take (acquire) the semaphore
      *
@@ -181,8 +183,6 @@ namespace cjf::freertos
    * @brief RAII lock guard for mutex
    *
    * Automatically locks mutex on construction and unlocks on destruction.
-   * Use for exception-safe (though this codebase doesn't use exceptions)
-   * and scope-based locking.
    */
   class lock_guard
   {
@@ -224,6 +224,5 @@ namespace cjf::freertos
   };
 
 } // namespace cjf::freertos
-
 
 #endif /* A75E4E88_5352_49A3_9992_34FCBBA4B30C */

@@ -28,6 +28,7 @@ namespace cjf
     {
       RETURN_ON_UNEXPECTED(config.reset_pin, config.log_tag);
       // Default to de-asserting the reset line
+      ESP_LOGI(config.log_tag, "Setting reset to de-asserted level: %d", !config.reset_level);
       RETURN_UNEXPECTED_ON_ERROR(config.reset_pin->set_level(!config.reset_level), config.log_tag);
       return has_gpio_reset(config);
     }
