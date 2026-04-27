@@ -27,6 +27,7 @@
 
 namespace cjf
 {
+  static const char *TG = "cjf:resource";
   /**
    * @brief RAII guard that keeps a resource active while in scope
    *
@@ -142,7 +143,9 @@ namespace cjf
         : ctrl_(&ctrl)
     {
       cjf::freertos::lock_guard lock(ctrl_->mutex_);
-      ctrl_->refcount.fetch_add(1, std::memory_order_relaxed);
+      uint32_t old_refcount = ctrl_->refcount.fetch_add(1, std::memory_order_relaxed);
+      uint32_t new_refcount = refcount();
+      ESP_LOGD(TG, "New shared guard instance %p (%lu→%lu)", ctrl_, old_refcount, new_refcount);
     }
 
     /**
@@ -165,7 +168,9 @@ namespace cjf
       if (ctrl_)
       {
         cjf::freertos::lock_guard lock(ctrl_->mutex_);
-        ctrl_->refcount.fetch_add(1, std::memory_order_relaxed);
+        uint32_t old_refcount = ctrl_->refcount.fetch_add(1, std::memory_order_relaxed);
+        uint32_t new_refcount = refcount();
+        ESP_LOGD(TG, "Copied construction shared guard %p (%lu→%lu)", ctrl_, old_refcount, new_refcount);
       }
     }
 
@@ -191,7 +196,9 @@ namespace cjf
         if (ctrl_)
         {
           cjf::freertos::lock_guard lock(ctrl_->mutex_);
-          ctrl_->refcount.fetch_add(1, std::memory_order_relaxed);
+          uint32_t old_refcount = ctrl_->refcount.fetch_add(1, std::memory_order_relaxed);
+          uint32_t new_refcount = refcount();
+          ESP_LOGD(TG, "Copy assignment shared guard %p (%lu→%lu)", ctrl_, old_refcount, new_refcount);
         }
       }
       return *this;
@@ -211,6 +218,7 @@ namespace cjf
     shared_guard(shared_guard &&other) noexcept
         : ctrl_(std::exchange(other.ctrl_, nullptr))
     {
+      ESP_LOGI(TG, "Move constructor shared guard %p (%lu)", ctrl_, refcount());
     }
 
     /**
@@ -231,6 +239,7 @@ namespace cjf
         release();
         ctrl_ = std::exchange(other.ctrl_, nullptr);
       }
+      ESP_LOGI(TG, "Move assignment shared guard %p (%lu)", ctrl_, refcount());
       return *this;
     }
 
@@ -324,12 +333,12 @@ namespace cjf
 
       cjf::freertos::lock_guard lock(ctrl_->mutex_);
       uint32_t old_refcount = ctrl_->refcount.fetch_sub(1, std::memory_order_relaxed);
-
-      // If this was the last reference, invoke the deactivator while the mutex
-      // is held. This prevents a concurrent acquire() from re-activating the
-      // resource before deactivation completes.
+      uint32_t new_refcount = refcount();
+      ESP_LOGD(TG, "Release shared guard %p (%lu→%lu)", ctrl_, old_refcount, new_refcount);
+      // If this was the last reference, invoke the deactivator
       if (old_refcount == 1)
       {
+        ESP_LOGI(TG, "calling deactivator");
         ctrl_->deactivator();
       }
     }
