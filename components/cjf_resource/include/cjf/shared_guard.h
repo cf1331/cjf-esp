@@ -27,6 +27,7 @@
 
 namespace cjf
 {
+  static const char *TG = "cjf:resource";
   /**
    * @brief RAII guard that keeps a resource active while in scope
    *
@@ -105,6 +106,7 @@ namespace cjf
     static bool needs_activation(const control_block &ctrl) noexcept
     {
       return ctrl.refcount.load(std::memory_order_relaxed) == 0;
+
     }
 
     /**
@@ -122,6 +124,7 @@ namespace cjf
       taskENTER_CRITICAL(&ctrl_->spinlock);
       ctrl_->refcount.fetch_add(1, std::memory_order_relaxed);
       taskEXIT_CRITICAL(&ctrl_->spinlock);
+      ESP_LOGD(TG, "New shared guard %p = %lu",&ctrl_,refcount());
     }
 
     /**
@@ -146,6 +149,7 @@ namespace cjf
         taskENTER_CRITICAL(&ctrl_->spinlock);
         ctrl_->refcount.fetch_add(1, std::memory_order_relaxed);
         taskEXIT_CRITICAL(&ctrl_->spinlock);
+        ESP_LOGD(TG, "Copied shared guard %p = %lu",&ctrl_,refcount());
       }
     }
 
@@ -173,6 +177,7 @@ namespace cjf
           taskENTER_CRITICAL(&ctrl_->spinlock);
           ctrl_->refcount.fetch_add(1, std::memory_order_relaxed);
           taskEXIT_CRITICAL(&ctrl_->spinlock);
+          ESP_LOGD(TG, "Copied shared guard %p = %lu",&ctrl_,refcount());
         }
       }
       return *this;
@@ -296,10 +301,11 @@ namespace cjf
       taskENTER_CRITICAL(&ctrl_->spinlock);
       uint32_t old_refcount = ctrl_->refcount.fetch_sub(1, std::memory_order_relaxed);
       taskEXIT_CRITICAL(&ctrl_->spinlock);
-
+      ESP_LOGD(TG, "Release shared guard %p = %lu",&ctrl_,refcount());
       // If this was the last reference, invoke the deactivator
       if (old_refcount == 1)
       {
+        ESP_LOGI(TG, "calling deactivator");
         ctrl_->deactivator();
       }
     }
