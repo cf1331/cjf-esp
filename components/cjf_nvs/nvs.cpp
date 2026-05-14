@@ -32,6 +32,14 @@ namespace cjf
     return nvs_get_blob(handle_.get(), key, blob, &len);
   }
 
+  std::expected<size_t, esp_err_t> nvs_namespace::get_blob_size(const char *key) const noexcept
+  {
+    size_t len = 0;
+    esp_err_t err = nvs_get_blob(handle_.get(), key, nullptr, &len);
+    if (err != ESP_OK) return std::unexpected(err);
+    return len;
+  }
+
   esp_err_t nvs_namespace::set_blob(const char *key, const void *blob, size_t len) const noexcept
   {
     return nvs_set_blob(handle_.get(), key, blob, len);

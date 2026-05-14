@@ -218,7 +218,7 @@ namespace cjf
     shared_guard(shared_guard &&other) noexcept
         : ctrl_(std::exchange(other.ctrl_, nullptr))
     {
-      ESP_LOGI(TG, "Move constructor shared guard %p (%lu)", ctrl_, refcount());
+      ESP_LOGD(TG, "Move constructor shared guard %p (%lu)", ctrl_, refcount());
     }
 
     /**
@@ -239,7 +239,7 @@ namespace cjf
         release();
         ctrl_ = std::exchange(other.ctrl_, nullptr);
       }
-      ESP_LOGI(TG, "Move assignment shared guard %p (%lu)", ctrl_, refcount());
+      ESP_LOGD(TG, "Move assignment shared guard %p (%lu)", ctrl_, refcount());
       return *this;
     }
 
@@ -338,7 +338,7 @@ namespace cjf
       // If this was the last reference, invoke the deactivator
       if (old_refcount == 1)
       {
-        ESP_LOGI(TG, "calling deactivator");
+        ESP_LOGD(TG, "calling deactivator %p", ctrl_);
         ctrl_->deactivator();
       }
     }

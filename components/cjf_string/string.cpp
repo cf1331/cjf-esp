@@ -4,13 +4,6 @@
 
 namespace cjf
 {
-
-  bool case_insensitive_equal(const std::string &a, const std::string &b)
-  {
-    return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), [](char lhs, char rhs)
-                                              { return std::tolower(lhs) == std::tolower(rhs); });
-  }
-
   std::string to_lower(const std::string &s)
   {
     std::string result = s;

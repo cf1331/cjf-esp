@@ -24,9 +24,9 @@ namespace cjf
    * - Immutable system constants
    *
    * @code{.cpp}
-   * const_param chip_id(std::string("ESP32-S3"));
+   * const_param chip_id(std::string_view{"ESP32-S3"});
    * chip_id.set(123);  // Returns param_error::read_only (with compiler warning)
-   * auto id = chip_id.get_as<std::string>();  // "ESP32-S3"
+   * auto id = chip_id.get_as<std::string_view>();  // "ESP32-S3"
    * @endcode
    */
   class const_param : public param

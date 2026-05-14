@@ -13,6 +13,15 @@
 namespace cjf
 {
   /**
+   * @brief Concept: valid type for mutable_param<T> — a param_value alternative
+   *        excluding std::string_view and param_null_type
+   */
+  template <typename T>
+  concept mutable_param_value_type =
+      param_value_type<T> &&
+      !std::is_same_v<T, std::string_view> &&
+      !std::is_same_v<T, param_null_type>;
+  /**
    * @brief Mutable parameter with type validation and change notifications
    *
    * Stores a value that can be modified with automatic type validation against
@@ -42,10 +51,14 @@ namespace cjf
    * temp.set(std::string("invalid"));  // Returns param_error::invalid_cast
    * @endcode
    */
-  template <typename T>
+  template <mutable_param_value_type T>
   class mutable_param : public param
   {
   public:
+    mutable_param(const mutable_param &) = delete;
+    mutable_param &operator=(const mutable_param &) = delete;
+    mutable_param(mutable_param &&) = delete;
+    mutable_param &operator=(mutable_param &&) = delete;
     /**
      * @brief Construct a mutable_param with an optional initial value
      * @param value Initial value, or `param_null` for no value
@@ -95,14 +108,14 @@ namespace cjf
     watchable<param> watchable_;
   };
 
-  template <typename T>
+  template <mutable_param_value_type T>
   inline mutable_param<T>::mutable_param(const param_value &value)
       : value_(std::holds_alternative<null_type>(value) ? param_null :
                param_cast<T>(value).has_value() ? value : param_null)
   {
   }
 
-  template <typename T>
+  template <mutable_param_value_type T>
   template <typename U>
     requires std::convertible_to<U, T>
   inline mutable_param<T>::mutable_param(U &&value)
@@ -110,13 +123,13 @@ namespace cjf
   {
   }
 
-  template <typename T>
+  template <mutable_param_value_type T>
   inline param_value mutable_param<T>::get() const noexcept
   {
     return value_;
   }
 
-  template <typename T>
+  template <mutable_param_value_type T>
   inline param_error mutable_param<T>::set(const param_value &value)
   {
     auto new_value = std::holds_alternative<null_type>(value)
@@ -131,13 +144,13 @@ namespace cjf
     return param_error::ok;
   }
 
-  template <typename T>
+  template <mutable_param_value_type T>
   inline void mutable_param<T>::watch(value_changed_func callback, void *ctx)
   {
     watchable_.watch(callback, ctx);
   }
 
-  template <typename T>
+  template <mutable_param_value_type T>
   inline void mutable_param<T>::unwatch(value_changed_func callback)
   {
     watchable_.unwatch(callback);

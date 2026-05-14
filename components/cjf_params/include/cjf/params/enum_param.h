@@ -10,9 +10,15 @@ namespace cjf
 {
 
   template <typename Enum>
+    requires std::is_enum_v<Enum>
   class enum_param : public param
   {
   public:
+    enum_param(const enum_param &) = delete;
+    enum_param &operator=(const enum_param &) = delete;
+    enum_param(enum_param &&) = delete;
+    enum_param &operator=(enum_param &&) = delete;
+
     enum_param(const Enum value) noexcept;
     enum_param() noexcept;
     enum_param(const param_value &value) noexcept;
@@ -27,74 +33,62 @@ namespace cjf
   private:
     std::optional<Enum> _value_enum;
     watchable<param> _watchable;
+
+    static std::optional<Enum> to_enum_(const param_value &value) noexcept;
   };
 
   template <typename Enum>
+    requires std::is_enum_v<Enum>
   inline enum_param<Enum>::enum_param(const Enum value) noexcept
       : _value_enum(value)
   {
   }
 
   template <typename Enum>
+    requires std::is_enum_v<Enum>
   inline enum_param<Enum>::enum_param() noexcept
       : _value_enum(std::nullopt)
   {
   }
 
   template <typename Enum>
+    requires std::is_enum_v<Enum>
   inline enum_param<Enum>::enum_param(const param_value &value) noexcept
-      : _value_enum(std::visit([](auto &&v) -> std::optional<Enum>
-                               {
-                                  if constexpr (std::is_same_v<std::decay_t<decltype(v)>, null_type>)
-                                  {
-                                    return std::nullopt;
-                                  }
-                                  else
-                                  {
-                                    return magic_enum::enum_cast<Enum>(v);
-                                  } },
-                               value))
+      : _value_enum(to_enum_(value))
   {
   }
 
   template <typename Enum>
+    requires std::is_enum_v<Enum>
   inline param_value enum_param<Enum>::get() const noexcept
   {
     return _value_enum
-        ? param_value(std::string(magic_enum::enum_name<Enum>(*_value_enum)))
+        ? param_value(magic_enum::enum_name(*_value_enum))
         : param_null;
   }
 
   template <typename Enum>
+    requires std::is_enum_v<Enum>
   inline std::optional<Enum> enum_param<Enum>::get_enum() const noexcept
   {
     return _value_enum;
   }
 
   template <typename Enum>
+    requires std::is_enum_v<Enum>
   inline bool enum_param<Enum>::operator==(const Enum value) const noexcept
   {
     return _value_enum && *_value_enum == value;
   }
 
   template <typename Enum>
+    requires std::is_enum_v<Enum>
   inline param_error enum_param<Enum>::set(const param_value &value) noexcept
   {
-    std::optional<Enum> new_value = std::visit([](auto &&v) -> std::optional<Enum>
-                                               {
-                            if constexpr (std::is_same_v<std::decay_t<decltype(v)>, null_type>)
-                            {
-                              return std::nullopt;
-                            }
-                            else
-                            {
-                              return magic_enum::enum_cast<Enum>(v);
-                            } },
-                                               value);
+    std::optional<Enum> new_value = to_enum_(value);
 
     if (!new_value && !std::holds_alternative<null_type>(value))
     {
-      // Only return error if conversion failed (not if explicitly set to null)
       return param_error::invalid_cast;
     }
 
@@ -104,6 +98,33 @@ namespace cjf
   }
 
   template <typename Enum>
+    requires std::is_enum_v<Enum>
+  inline std::optional<Enum> enum_param<Enum>::to_enum_(const param_value &value) noexcept
+  {
+    return std::visit([](auto &&v) -> std::optional<Enum>
+    {
+      using V = std::decay_t<decltype(v)>;
+      if constexpr (std::is_same_v<V, null_type>)
+      {
+        return std::nullopt;
+      }
+      else if constexpr (std::is_same_v<V, std::string_view>)
+      {
+        return magic_enum::enum_cast<Enum>(v);
+      }
+      else if constexpr (std::is_integral_v<V>)
+      {
+        return magic_enum::enum_cast<Enum>(static_cast<std::underlying_type_t<Enum>>(v));
+      }
+      else
+      {
+        return std::nullopt;
+      }
+    }, value);
+  }
+
+  template <typename Enum>
+    requires std::is_enum_v<Enum>
   inline void enum_param<Enum>::set_enum(const Enum value) noexcept
   {
     _value_enum = value;
@@ -111,12 +132,14 @@ namespace cjf
   }
 
   template <typename Enum>
+    requires std::is_enum_v<Enum>
   inline void enum_param<Enum>::watch(value_changed_func callback, void *ctx)
   {
     _watchable.watch(callback, ctx);
   }
 
   template <typename Enum>
+    requires std::is_enum_v<Enum>
   inline void enum_param<Enum>::unwatch(value_changed_func callback)
   {
     _watchable.unwatch(callback);

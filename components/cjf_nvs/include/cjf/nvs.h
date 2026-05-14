@@ -142,6 +142,7 @@ namespace cjf
     }
 
     esp_err_t get_blob(const char *key, void *blob, size_t len) const noexcept;
+    std::expected<size_t, esp_err_t> get_blob_size(const char *key) const noexcept;
     esp_err_t set_blob(const char *key, const void *blob, size_t len) const noexcept;
 
     esp_err_t get_string(const char *key, char *str, size_t len) const noexcept;

@@ -67,6 +67,35 @@ namespace cjf
      */
     esp_err_t probe(int32_t timeout_ms) const;
 
+    /**
+     * @brief Returns true if this device currently has a live I2C bus handle.
+     *
+     * I2C operations (read, write, probe) return `ESP_ERR_INVALID_STATE` when false.
+     */
+    bool is_connected() const noexcept;
+
+    /**
+     * @brief Disconnect this device from the I2C bus, releasing the ESP-IDF handle.
+     *
+     * After calling this method, `is_connected()` returns false and any I2C operations
+     * will return `ESP_ERR_INVALID_STATE`. Outstanding guards whose deactivators perform
+     * I2C writes (e.g., channel guards on TCA9548A) must not be released while the device
+     * is disconnected. Call `connect()` before any such guards are destroyed.
+     */
+    void disconnect() noexcept;
+
+    /**
+     * @brief Connect (or reconnect) this device to an I2C master bus.
+     *
+     * Uses the `i2c_device_config_t` stored at construction time. Call this after
+     * `configure_i2c(master_config)` to restore transport connectivity without
+     * recreating the device or disturbing any live guards.
+     *
+     * @param master The I2C master bus to connect to
+     * @return `ESP_OK` on success, error code otherwise
+     */
+    esp_err_t connect(const i2c_master &master) noexcept;
+
   protected:
     /// Log tag for I2C device operations
     static constexpr const char *CJF_I2C_DEVICE = "cjf:i2c_device";
@@ -93,6 +122,19 @@ namespace cjf
     explicit i2c_device(const i2c_master &master, uint16_t address, handle_type &&handle) noexcept;
 
     /**
+     * @brief Protected constructor that stores the device config for later connection.
+     *
+     * Use this overload for devices that may need to be disconnected and reconnected
+     * across I2C master reinitialisations (e.g., TCA9548A, TCAL6416). The device
+     * address is extracted from `config.device_address`.
+     *
+     * @param master Reference to the I2C master bus
+     * @param handle Unique pointer to the device handle
+     * @param config Device configuration (stored for use by `connect()`)
+     */
+    explicit i2c_device(const i2c_master &master, handle_type &&handle, i2c_device_config_t config) noexcept;
+
+    /**
      * @brief Read data from the device
      * @param buffer Buffer to store read data
      * @param buffer_size Size of the buffer
@@ -116,6 +158,10 @@ namespace cjf
 
     /// Managed handle to the ESP-IDF device
     handle_type handle_;
+
+    /// Device configuration stored for use by `connect()`. Zero-initialised for devices
+    /// constructed without config (those cannot be reconnected).
+    i2c_device_config_t config_ = {};
   };
 
   /**
@@ -193,6 +239,8 @@ namespace cjf
         const RegAddressType reg_address,
         const int32_t timeout_ms) const
     {
+      if (!this->is_connected())
+        return std::unexpected(ESP_ERR_INVALID_STATE);
       ValueType value;
       esp_err_t err;
       ESP_LOGD(I2C_DEVICE_TAG, "0x%02x read reg 0x%02x", this->address(), reg_address);
@@ -301,6 +349,8 @@ namespace cjf
         ValueType value,
         const int32_t timeout_ms) const
     {
+      if (!this->is_connected())
+        return ESP_ERR_INVALID_STATE;
       i2c_master_transmit_multi_buffer_info_t buffers[] = {
           {.write_buffer = reinterpret_cast<uint8_t *>(&reg_address),
            .buffer_size = sizeof(reg_address)},

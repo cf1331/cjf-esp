@@ -10,8 +10,10 @@
 namespace cjf
 {
 
-  cJSON *to_json(const param &param);
-  cJSON *to_json(const std::map<const char *, param *> &params);
+  std::expected<std::string_view, esp_err_t> to_json(char *first, char *last, std::string_view str);
+  std::expected<std::string_view, esp_err_t> to_json(char *first, char *last, const param_value &value);
+  std::expected<std::string_view, esp_err_t> to_json(char *first, char *last, const param &param);
+  std::expected<std::string_view, esp_err_t> to_json(char *first, char *last, const std::map<const char *, param *> &params);
   std::expected<param_value, esp_err_t> from_json(const cJSON *json);
   esp_err_t from_json(param &param, const cJSON *json);
   esp_err_t from_json(const std::map<const char*, param *> &params, const cJSON *json);

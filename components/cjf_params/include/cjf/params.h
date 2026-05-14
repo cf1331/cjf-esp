@@ -12,20 +12,15 @@
 
 #include <charconv>
 #include <cjf/string.h>
+#include <cjf/type_traits.h>
 #include <cstdint>
 #include <expected>
 #include <magic_enum/magic_enum.hpp>
-#include <optional>
-#include <string>
+#include <string_view>
 #include <variant>
 
 namespace cjf
 {
-  /// @cond INTERNAL
-  template <class>
-  inline constexpr bool always_false_v = false;
-  /// @endcond
-
   /**
    * @brief Error codes for parameter operations
    */
@@ -39,8 +34,27 @@ namespace cjf
 
   [[nodiscard]] constexpr auto param_error_to_name(param_error err)
   {
-    return magic_enum::enum_name(err);
+    switch (err)
+    {
+    case param_error::ok:
+      return "param_error::ok";
+    case param_error::read_only:
+      return "param_error::read_only";
+    case param_error::invalid_cast:
+      return "param_error::invalid_cast";
+    case param_error::out_of_range:
+      return "param_error::out_of_range";
+    default:
+      return "param_error::unknown";
+    }
   };
+
+  /**
+   * @brief Sentinel value representing a parameter with no value
+   */
+  inline constexpr std::monostate param_null{};
+
+  using param_null_type = std::monostate;
 
   /**
    * @brief Variant type holding all supported parameter value types
@@ -49,7 +63,7 @@ namespace cjf
    * std::monostate represents a null/empty parameter value.
    */
   using param_value = std::variant<
-      std::monostate,
+      param_null_type,
       char,
       signed char,
       unsigned char,
@@ -64,12 +78,14 @@ namespace cjf
       bool,
       float,
       double,
-      std::string>;
+      std::string_view>;
 
   /**
-   * @brief Sentinel value representing a parameter with no value
+   * @brief Concept: type must be one of the types in param_value variant
    */
-  inline const param_value param_null = std::monostate{};
+  template <typename T>
+  concept param_value_type = is_variant_alternative<T, param_value>::value;
+
 
   /**
    * @brief Abstract base class for type-safe parameter wrappers
@@ -131,8 +147,8 @@ namespace cjf
      *
      * @code{.cpp}
      * mutable_param<int> param(42);
-     * auto str = param.get_as<std::string>();  // Returns "42"
-     * auto val = param.get_as<double>();        // Returns 42.0
+     * auto str = param.get_as<std::string_view>();  // Returns "42"
+     * auto val = param.get_as<double>();            // Returns 42.0
      * @endcode
      */
     template <typename T>
@@ -146,6 +162,24 @@ namespace cjf
   };
 
   /**
+   * @brief Abstract base class for string parameters that can be passed to C APIs.
+   *
+   * Extends `param` with a `get_c_str()` method guaranteeing a null-terminated
+   * pointer, suitable for use with C APIs that require `const char *`.
+   */
+  class string_param : public param
+  {
+  public:
+    /**
+     * @brief Get a null-terminated C string pointer for use with C APIs.
+     * @return Pointer to the string value as a null-terminated C string,
+     *         or `nullptr` if the parameter is null. Always check `has_value()`
+     *         before passing to C APIs that do not accept `nullptr`.
+     */
+    virtual const char *get_c_str() const noexcept = 0;
+  };
+
+  /**
    * @brief Convert a param_value to a specific type with automatic conversion
    * @tparam T Target type for conversion
    * @param value The variant value to convert
@@ -153,20 +187,23 @@ namespace cjf
    *
    * Supports conversions between:
    * - Numeric types (with range checking)
-   * - String to/from numeric and bool
-   * - Bool to/from string ("true"/"false", "1"/"0")
+   * - std::string_view to numeric and bool (parsing)
    *
-   * @note String parsing is case-insensitive. Uses `std::from_chars` for
-   *       exception-free parsing.
+   * Numeric and bool to std::string_view conversion i not supported — use cjf::to_chars instead
+   *
+   * @note String parsing is case-insensitive for bool. Uses `std::from_chars` for
+   *       exception-free numeric parsing.
    *
    * @code{.cpp}
    * param_value v = 42;
-   * auto str = param_cast<std::string>(v);  // "42"
-   * auto dbl = param_cast<double>(v);       // 42.0
+   * auto dbl = param_cast<double>(v);                   // 42.0
    *
-   * param_value s = std::string("200");
-   * auto i = param_cast<int>(s);            // 200
-   * auto too_big = param_cast<int8_t>(s);   // param_error::out_of_range
+   * param_value s = std::string_view("200");
+   * auto i = param_cast<int>(s);                        // 200
+   * auto too_big = param_cast<int8_t>(s);               // param_error::out_of_range
+   *
+   * auto sv = param_cast<std::string_view>(v);          // param_error::invalid_cast
+   * // use cjf::to_chars(buf, buf+N, v) to produce a string
    * @endcode
    */
   template <typename T>
@@ -176,125 +213,101 @@ namespace cjf
         [](auto &&v) -> std::expected<T, param_error>
         {
           using V = std::decay_t<decltype(v)>;
-          if constexpr (std::is_same_v<V, param::null_type>)
+          if constexpr (std::is_same_v<T, V>)
           {
-            // null_type is not convertible to any type
+            // When the return type matches the held type, no conversion is needed
+            return v;
+          }
+          else if constexpr (std::is_same_v<V, param::null_type>)
+          {
+            // Null cannot be converted to any other type. Null represents the absense of a value,
+            // so conceptually it doesn't make sense for it to be converted to something else.
             return std::unexpected(param_error::invalid_cast);
           }
-          else if constexpr (std::is_same_v<T, V>)
-            // When the return type is the same as the value type, no conversion
-            // necessary
-            return v;
-          else if constexpr(std::is_same_v<T, std::string>)
+          else if constexpr (std::is_same_v<T, std::string_view>)
           {
-            // When returning a string...
-            if constexpr (std::is_same_v<V, bool>)
-              // If the value is a bool, return "true" or "false"
-              return v ? std::string("true") : std::string("false");
-            else
-              // Otherwise the value will be numeric and can be converted to a string
-              return std::to_string(v);
+            // std::string_view cannot be converted from other types. This is because it
+            // requires backing storage and we don't have a way to provide that here without
+            // dynamic allocation.
+            return std::unexpected(param_error::invalid_cast);
           }
-          else if constexpr(std::is_same_v<V, std::string>)
+          else if constexpr (std::is_same_v<V, std::string_view>)
           {
-            // When the value is a string...
-            if constexpr(std::is_same_v<T, bool>)
+            // Parsing: string_view -> T
+            if constexpr (std::is_same_v<T, bool>)
             {
-              // Parse the string to get a boolean.
-              //   "1" and "true" will be converted to true
-              //   "0" and "false" will be converted to false
-              // Other values will throw a std::invalid_argument exception.
-              // Parsing is case-insensitive.
-              std::string v_lower = cjf::to_lower(v.substr(0, 5));
-              if (v_lower == "1" || v_lower == "true")
-              {
-                return true;
-              }
-              else if (v.empty() || v_lower == "0" || v_lower == "false")
-              {
-                return false;
-              }
-              else
-              {
-                return std::unexpected(param_error::invalid_cast);
-              }
+              bool is_truthy = cjf::case_insensitive_equal(v, "1") || cjf::case_insensitive_equal(v, "true");
+              if (is_truthy) return true;
+              bool is_falsy = v.empty() || cjf::case_insensitive_equal(v, "0") || cjf::case_insensitive_equal(v, "false");
+              if (is_falsy) return false;
+              return std::unexpected(param_error::invalid_cast);
             }
-            if constexpr(std::is_integral_v<T> && std::is_signed_v<T>)
+            else if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T>)
             {
-              // Parse the string to get a signed integer. If the value is larger or
-              // smaller than the range of type T, return param_error::out_of_range.
-              long long int_val;
-              auto result = std::from_chars(v.data(), v.data() + v.size(), int_val);
-              if (result.ec == std::errc::invalid_argument)
-              {
-                return std::unexpected(param_error::invalid_cast);
-              }
-              if (result.ec == std::errc::result_out_of_range ||
-                  int_val < std::numeric_limits<T>::min() ||
-                  int_val > std::numeric_limits<T>::max())
-              {
+              T val;
+              auto result = std::from_chars(v.data(), v.data() + v.size(), val);
+              if (result.ec == std::errc())
+                return val;
+              if (result.ec == std::errc::result_out_of_range)
                 return std::unexpected(param_error::out_of_range);
-              }
-              return static_cast<T>(int_val);
+              return std::unexpected(param_error::invalid_cast);
             }
-            else if constexpr(std::is_integral_v<T> && !std::is_signed_v<T>)
-            {
-              // Return param_error::out_of_range if the value is negative.
-              // The check is done on the string because std::from_chars will
-              // wrap around a negative value to a large positive value.
-              auto n = v.find_first_not_of(" \f\n\r\t\v");
-              if (n != std::string::npos && v[n] == '-')
-              {
-                return std::unexpected(param_error::out_of_range);
-              }
-              unsigned long long uint_val;
-              auto result = std::from_chars(v.data(), v.data() + v.size(), uint_val);
-              if (result.ec == std::errc::invalid_argument)
-              {
-                return std::unexpected(param_error::invalid_cast);
-              }
-              if (result.ec == std::errc::result_out_of_range ||
-                  uint_val > std::numeric_limits<T>::max())
-              {
-                return std::unexpected(param_error::out_of_range);
-              }
-              return static_cast<T>(uint_val);
-            }
-            else if constexpr(std::is_floating_point_v<T>)
-            {
-              // Parse the string to get a floating point number.
-              return static_cast<T>(std::stod(v));
-            }
+            // else if constexpr (std::is_integral_v<T> && std::is_signed_v<T>)
+            // {
+            //   long long int_val;
+            //   auto result = std::from_chars(v.data(), v.data() + v.size(), int_val);
+            //   if (result.ec == std::errc::invalid_argument)
+            //     return std::unexpected(param_error::invalid_cast);
+            //   if (result.ec == std::errc::result_out_of_range ||
+            //       int_val < std::numeric_limits<T>::min() ||
+            //       int_val > std::numeric_limits<T>::max())
+            //     return std::unexpected(param_error::out_of_range);
+            //   return static_cast<T>(int_val);
+            // }
+            // else if constexpr (std::is_integral_v<T> && !std::is_signed_v<T>)
+            // {
+            //   // Check for leading '-' before from_chars, which would wrap silently
+            //   auto n = v.find_first_not_of(" \f\n\r\t\v");
+            //   if (n != std::string_view::npos && v[n] == '-')
+            //     return std::unexpected(param_error::out_of_range);
+            //   unsigned long long uint_val;
+            //   auto result = std::from_chars(v.data(), v.data() + v.size(), uint_val);
+            //   if (result.ec == std::errc::invalid_argument)
+            //     return std::unexpected(param_error::invalid_cast);
+            //   if (result.ec == std::errc::result_out_of_range ||
+            //       uint_val > std::numeric_limits<T>::max())
+            //     return std::unexpected(param_error::out_of_range);
+            //   return static_cast<T>(uint_val);
+            // }
+            // else if constexpr (std::is_floating_point_v<T>)
+            // {
+            //   double fp_val;
+            //   auto result = std::from_chars(v.data(), v.data() + v.size(), fp_val);
+            //   if (result.ec == std::errc::invalid_argument)
+            //     return std::unexpected(param_error::invalid_cast);
+            //   if (result.ec == std::errc::result_out_of_range)
+            //     return std::unexpected(param_error::out_of_range);
+            //   return static_cast<T>(fp_val);
+            // }
             else
             {
-              static_assert(always_false_v<V>, "invalid type cast");
+              static_assert(always_false_v<T>, "unsupported target type for string_view param_cast");
+              return std::unexpected(param_error::invalid_cast);
             }
           }
-          else if constexpr(std::is_integral_v<T> || std::is_floating_point_v<T>)
+          else if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T>)
           {
-            // When the return type and value type are both numeric or bool, they
-            // can be statically cast.
+            // Numeric <-> numeric: static cast
             return static_cast<T>(v);
           }
           else
           {
             static_assert(always_false_v<T>, "invalid type cast");
-          } },
+            return std::unexpected(param_error::invalid_cast);
+          }
+        },
         value);
   }
-
-  // /**
-  //  * @brief Convert an expected param_value to a specific type
-  //  * @tparam T Target type for conversion
-  //  * @param value Expected containing value or error
-  //  * @return Converted value or propagated error
-  //  */
-  // template <typename T>
-  // constexpr std::expected<T, param_error> param_cast(const std::expected<param_value, param_error> &value)
-  // {
-  //   return value ? param_cast<T>(*value)
-  //                : std::unexpected(value.error());
-  // }
 
   /**
    * @brief Convert a param's value to a specific type
@@ -330,6 +343,26 @@ namespace cjf
     target = *value;
     return param_error::ok;
   }
+
+  /**
+   * @brief Convert a param_value to its string representation into a caller-provided buffer
+   *
+   * Mirrors the `std::to_chars` buffer idiom. The returned `string_view` points into
+   * `[first, last)` and is valid for as long as the buffer remains in scope.
+   *
+   * - Numeric types delegate to `std::to_chars`
+   * - `bool` writes `"true"` or `"false"`
+   * - `std::string_view` copies the string data into the buffer
+   * - `std::monostate` (null) writes nothing and returns an empty view
+   *
+   * @param first Pointer to start of output buffer
+   * @param last  Pointer one-past-end of output buffer
+   * @param value The param_value to convert
+   * @return The written string as a `string_view` into the buffer,
+   *         or `param_error::out_of_range` if the buffer is too small
+   */
+  [[nodiscard]] std::expected<std::string_view, param_error>
+  to_chars(char *first, char *last, const param_value &value) noexcept;
 
 } // namespace cjf
 

@@ -119,9 +119,26 @@ namespace cjf
     static void timer_callback(void *context);
   };
 
-  // ============================================================================
-  // Template implementation
-  // ============================================================================
+  /**
+   * @brief Construct a status_led from an expected LED strip
+   * @tparam LedStrip LED strip type satisfying LedStripLike
+   * @param leds Expected LED strip to wrap; the error is propagated if it contains an error
+   * @return Expected status_led on success, or the original error on failure
+   *
+   * Converts an `std::expected<LedStrip, esp_err_t>` into an
+   * `std::expected<status_led<LedStrip>, esp_err_t>`, propagating any error
+   * without constructing the controller. Intended for use with board-support
+   * methods that already return expected LED resources:
+   *
+   * ```cpp
+   * auto status_led = cjf::status_led_from(board.use_status_led());
+   * if (status_led) status_led->set_mode(&STATUSLED_READY);
+   * ```
+   */
+  template <LedStripLike LedStrip>
+  std::expected<status_led<LedStrip>, esp_err_t> status_led_from(std::expected<LedStrip, esp_err_t> leds) noexcept;
+
+/* Template implementations ═════════════════════════════════════════════════════════════════════ */
 
   template <LedStripLike LedStrip>
   status_led<LedStrip>::status_led(LedStrip leds) noexcept
@@ -236,6 +253,19 @@ namespace cjf
       {
         schedule_next_tick(next_period);
       }
+    }
+  }
+
+  template <LedStripLike LedStrip>
+  std::expected<status_led<LedStrip>, esp_err_t> status_led_from(std::expected<LedStrip, esp_err_t> leds) noexcept
+  {
+    if (leds)
+    {
+      return std::expected<status_led<LedStrip>, esp_err_t>(std::in_place, std::move(*leds));
+    }
+    else
+    {
+      return std::unexpected(leds.error());
     }
   }
 

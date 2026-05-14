@@ -13,8 +13,6 @@
 #include <esp_log.h>
 #include <expected>
 #include <memory>
-#include <magic_enum/magic_enum.hpp>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -41,17 +39,19 @@ namespace cjf
    * boot_count.set(boot_count.get_as<uint32_t>().value_or(0) + 1);
    *
    * // Load string parameter with default
-   * cjf::mutable_param<std::string> device_name;
-   * store->load<std::string>("device_name", device_name, std::string("ESP32"));
+   * cjf::mutable_param<std::string_view> device_name;
+   * store->load<std::string_view>("device_name", device_name, "ESP32");
    *
    * // Manually save a parameter
-   * device_name.set(std::string("MyDevice"));
-   * store->save<std::string>("device_name", device_name);
+   * device_name.set(std::string_view{"MyDevice"});
+   * store->save<std::string_view>("device_name", device_name);
    * ```
    */
   class params_store_nvs : public std::enable_shared_from_this<params_store_nvs>
   {
   public:
+    constexpr static const size_t DEFAULT_STRING_BUFFER_SIZE = 256;
+
     // Passkey idiom - allows make_shared to call constructor, but external code cannot
     struct passkey
     {
@@ -77,7 +77,7 @@ namespace cjf
      * @param param Parameter to populate with loaded value
      * @return ESP_OK on success, ESP_ERR_NVS_NOT_FOUND if key doesn't exist
      */
-    template <typename T>
+    template <cjf::param_value_type T, size_t BufferSize = DEFAULT_STRING_BUFFER_SIZE>
     esp_err_t load(const char *key, param &param) noexcept;
 
     /**
@@ -88,8 +88,8 @@ namespace cjf
      * @param default_value Value to use if key not found in NVS
      * @return ESP_OK on success (including when default was used)
      */
-    template <typename T>
-    esp_err_t load(const char *key, param &param, const T &default_value) noexcept;
+    template <cjf::param_value_type T, size_t BufferSize = DEFAULT_STRING_BUFFER_SIZE>
+    esp_err_t load(const char *key, param &param, const std::variant<T, param_null_type> &default_value) noexcept;
 
     /**
      * @brief Load parameter and register auto-save on value changes
@@ -101,8 +101,8 @@ namespace cjf
      *
      * After calling this, any changes to `param` will automatically persist to NVS.
      */
-    template <typename T>
-    esp_err_t load_and_save_on_change(const char *key, param &param, const T &default_value) noexcept;
+    template <cjf::param_value_type T, size_t BufferSize = DEFAULT_STRING_BUFFER_SIZE>
+    esp_err_t load_and_save_on_change(const char *key, param &param, const std::variant<T, param_null_type> &default_value) noexcept;
 
     /**
      * @brief Load parameter and register auto-save, using param's current value as default
@@ -114,7 +114,7 @@ namespace cjf
      * If the param has no value (param_null), the key is loaded from NVS with no default.
      * After calling this, any changes to `param` will automatically persist to NVS.
      */
-    template <typename T>
+    template <cjf::param_value_type T, size_t BufferSize = DEFAULT_STRING_BUFFER_SIZE>
     esp_err_t load_and_save_on_change(const char *key, param &param) noexcept;
 
     /**
@@ -124,7 +124,7 @@ namespace cjf
      * @param param Parameter to save
      * @return ESP_OK on success
      */
-    template <typename T>
+    template <cjf::param_value_type T>
     esp_err_t save(const char *key, param &param) noexcept;
 
     /**
@@ -133,7 +133,7 @@ namespace cjf
      * @param key NVS key name
      * @param param Parameter to watch
      */
-    template <typename T>
+    template <cjf::param_value_type T>
     void save_on_change(const char *key, param &param) noexcept;
 
     /**
@@ -153,6 +153,18 @@ namespace cjf
     explicit params_store_nvs(passkey, nvs_namespace &&ns) noexcept;
 
   private:
+    constexpr static const char *ACTION_DEFAULT = "default";
+    constexpr static const char *ACTION_LOADED = "loaded";
+    constexpr static const char *ACTION_SAVED = "saved";
+
+    constexpr static const char *ERR_FAILED_STRING_CONVERSION = "failed string conversion";
+    constexpr static const char *ERR_FAILED_TO_COMMIT_PARAM = "failed to commit param";
+    constexpr static const char *ERR_FAILED_TO_ERASE_PARAM = "failed to erase param";
+    constexpr static const char *ERR_FAILED_TO_GET_PARAM = "failed to get param";
+    constexpr static const char *ERR_FAILED_TO_LOAD_PARAM = "failed to load param";
+    constexpr static const char *ERR_FAILED_TO_SAVE_PARAM = "failed to save param";
+    constexpr static const char *ERR_FAILED_TO_SET_PARAM = "failed to set param";
+
     struct save_on_change_ctx
     {
       std::weak_ptr<params_store_nvs> self;
@@ -162,116 +174,139 @@ namespace cjf
     static const char *TAG;
     nvs_namespace ns_;
     std::vector<std::unique_ptr<save_on_change_ctx>> watch_contexts_; // Auto-cleanup contexts
+
+    template <cjf::param_value_type T>
+    void log_param_(const char *key, const T &value, const char *action) const noexcept;
+    void log_param_error_(const char *key, esp_err_t err, const char *msg) const noexcept;
+    void log_param_error_(const char *key, param_error err, const char *msg) const noexcept;
   };
 
   // Template implementations
 
-  template <typename T>
+  template <cjf::param_value_type T, size_t BufferSize>
   inline esp_err_t params_store_nvs::load(const char *key, param &param) noexcept
   {
-    if constexpr (std::is_same_v<T, std::string>)
+    if constexpr (std::is_same_v<T, std::string_view>)
     {
-      auto str = ns_.get_string(key);
-      if (!str) return str.error();
-      param.set(*str);
-      ESP_LOGI(TAG, "%s = %s (loaded)", key, str->c_str());
+      auto blob_size = ns_.get_blob_size(key);
+      if (!blob_size) return blob_size.error();
+      std::array<char, BufferSize> buf;
+      size_t max_size = std::min(blob_size.value(), buf.size());
+      if (auto res = ns_.get_blob(key, buf.data(), max_size); res != ESP_OK) return res;
+      std::string_view value{buf.data(), max_size};
+      if (auto res = param.set(value); res != param_error::ok)
+      {
+        log_param_error_(key, res, ERR_FAILED_TO_SET_PARAM);
+        return ESP_FAIL;
+      }
+      log_param_(key, value, ACTION_LOADED);
       return ESP_OK;
     }
     else
     {
       auto value = ns_.get_item<T>(key);
       if (!value) return value.error();
-      param.set(*value);
-      ESP_LOGI(TAG, "%s = %s (loaded)", key, param.get_as<std::string>().value_or("").c_str());
+      if (auto res = param.set(*value); res != param_error::ok)
+      {
+        log_param_error_(key, res, ERR_FAILED_TO_SET_PARAM);
+        return ESP_FAIL;
+      }
+      log_param_(key, *value, ACTION_LOADED);
       return ESP_OK;
     }
   }
 
-  template <typename T>
-  inline esp_err_t params_store_nvs::load(const char *key, param &param, const T &default_value) noexcept
+  template <cjf::param_value_type T, size_t BufferSize>
+  inline esp_err_t params_store_nvs::load(const char *key, param &param, const std::variant<T, param_null_type> &default_value) noexcept
   {
     esp_err_t err = load<T>(key, param);
     if (err == ESP_ERR_NVS_NOT_FOUND)
     {
       param.set(default_value);
-      ESP_LOGI(TAG, "%s = %s (default)", key, param.get_as<std::string>().value_or("").c_str());
+      log_param_(key, default_value, ACTION_DEFAULT);
       err = ESP_OK; // Not finding the key is OK when we have a default
     }
     return err;
   }
 
-  template <typename T>
-  inline esp_err_t params_store_nvs::load_and_save_on_change(
-      const char *key, param &param, const T &default_value) noexcept
-  {
-    esp_err_t err = load<T>(key, param, default_value);
-    if (err == ESP_OK)
-    {
-      save_on_change<T>(key, param);
-    }
-    return err;
-  }
-
-  template <typename T>
+  template <cjf::param_value_type T, size_t BufferSize>
   inline esp_err_t params_store_nvs::load_and_save_on_change(
       const char *key, param &param) noexcept
   {
-    esp_err_t err;
-
-    // If param has a value, use it as the default and try to load from nvs
-    if (param.has_value())
+    esp_err_t err = load<T>(key, param);
+    if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND)
     {
-      auto default_value = param.get_as<T>();
-      if (!default_value)
-      {
-        auto err_name = param_error_to_name(default_value.error());
-        ESP_LOGE(TAG, "Parameter has value but failed to convert to expected type for key: %s (%.*s)", key, err_name.size(), err_name.data());
-        return ESP_ERR_INVALID_ARG;
-      }
-      err = load<T>(key, param, *default_value);
+      log_param_error_(key, err, ERR_FAILED_TO_LOAD_PARAM);
+      return err;
     }
-    else
-    {
-      // No default value - only load if key exists in NVS
-      err = load<T>(key, param);
-      if (err == ESP_ERR_NVS_NOT_FOUND)
-      {
-        ESP_LOGI(TAG, "%s = null (default)", key);
-        err = ESP_OK; // Not finding the key is OK when there's no default
-      }
-    }
-    RETURN_ON_ERROR(err, TAG, "Failed to load value for key: %s (%s)", key, esp_err_to_name(err));
     save_on_change<T>(key, param);
     return ESP_OK;
   }
 
-  template <typename T>
+  template <cjf::param_value_type T, size_t BufferSize>
+  inline esp_err_t params_store_nvs::load_and_save_on_change(
+      const char *key, param &param, const std::variant<T, param_null_type> &default_value) noexcept
+  {
+    esp_err_t err = load<T>(key, param, default_value);
+    if (err != ESP_OK)
+    {
+      log_param_error_(key, err, ERR_FAILED_TO_LOAD_PARAM);
+      return err;
+    }
+    save_on_change<T>(key, param);
+    return ESP_OK;
+  }
+
+  template <cjf::param_value_type T>
   inline esp_err_t params_store_nvs::save(const char *key, param &param) noexcept
   {
     if (!param.has_value())
     {
-      return erase(key);
+      esp_err_t err = erase(key);
+      if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND)
+      {
+        log_param_error_(key, err, ERR_FAILED_TO_ERASE_PARAM);
+        return err;
+      }
+      ESP_LOGI(TAG, "%s = <erased> (%s)", key, ACTION_SAVED);
+      return ESP_OK;
     }
 
-    if constexpr (std::is_same_v<T, std::string>)
+    auto value = param.get_as<T>();
+    if (!value)
     {
-      auto value = param.get_as<std::string>();
-      RETURN_ERROR_ON_UNEXPECTED(value, TAG, "Failed to get string param value for key: %s", key);
-      RETURN_ON_ERROR(ns_.set_string(key, value->c_str()), TAG, "Failed to save value for key: %s", key);
+      log_param_error_(key, value.error(), ERR_FAILED_TO_GET_PARAM);
+      return ESP_FAIL;
+    }
+
+    if constexpr (std::is_same_v<T, std::string_view>)
+    {
+      if (auto res = ns_.set_blob(key, value->data(), value->size()); res != ESP_OK)
+      {
+        log_param_error_(key, res, ERR_FAILED_TO_SAVE_PARAM);
+        return res;
+      }
     }
     else
     {
-      auto value = param.get_as<T>();
-      RETURN_ERROR_ON_UNEXPECTED(value, TAG, "Failed to get param value for key: %s", key);
-      RETURN_ON_ERROR(ns_.set_item(key, *value), TAG, "Failed to save value for key: %s", key);
+      if (auto res = ns_.set_item(key, *value); res != ESP_OK)
+      {
+        log_param_error_(key, res, ERR_FAILED_TO_SAVE_PARAM);
+        return res;
+      }
     }
 
-    ns_.commit();
-    ESP_LOGI(TAG, "%s = %s (saved)", key, param.get_as<std::string>().value_or("").c_str());
+    if (esp_err_t res = ns_.commit(); res != ESP_OK)
+    {
+      log_param_error_(key, res, ERR_FAILED_TO_COMMIT_PARAM);
+      return res;
+    }
+
+    log_param_(key, *value, ACTION_SAVED);
     return ESP_OK;
   }
 
-  template <typename T>
+  template <cjf::param_value_type T>
   inline void params_store_nvs::save_on_change(const char *key, param &param) noexcept
   {
     // Use weak_ptr to avoid dangling pointer if params_store_nvs is destroyed
@@ -293,6 +328,38 @@ namespace cjf
           }
         },
         ctx.get());
+  }
+
+  template <cjf::param_value_type T>
+  inline void params_store_nvs::log_param_(const char *key, const T &value, const char *action) const noexcept
+  {
+    if constexpr (std::is_same_v<T, std::string_view>)
+    {
+      ESP_LOGI(TAG, "%s = \"%.*s\" (%s)", key, value.size(), value.data(), action);
+    }
+    else
+    {
+      std::array<char, 32> buf;
+      auto value_str = cjf::to_chars(buf.begin(), buf.end(), value);
+      if (value_str.has_value())
+      {
+        ESP_LOGI(TAG, "%s = %.*s (%s)", key, value_str->size(), value_str->data(), action);
+      }
+      else
+      {
+        log_param_error_(key, value_str.error(), ERR_FAILED_STRING_CONVERSION);
+      }
+    }
+  }
+
+  inline void params_store_nvs::log_param_error_(const char *key, esp_err_t err, const char *msg) const noexcept
+  {
+    ESP_LOGE(TAG, "%s = <%s: %s>", key, msg, esp_err_to_name(err));
+  }
+
+  inline void params_store_nvs::log_param_error_(const char *key, param_error err, const char *msg) const noexcept
+  {
+    ESP_LOGE(TAG, "%s = <%s: %s>", key, msg, param_error_to_name(err));
   }
 
 } // namespace cjf

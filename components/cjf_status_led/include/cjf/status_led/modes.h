@@ -64,7 +64,7 @@ namespace cjf
      */
     struct config
     {
-      size_t led;                                ///< LED index to animate
+      size_t led = 0;                            ///< LED index to animate
       cjf::color color;                          ///< Color when LED is on
       TickType_t on_time;                        ///< Duration LED stays on
       TickType_t off_time;                       ///< Duration LED stays off
@@ -112,7 +112,7 @@ namespace cjf
      */
     struct config
     {
-      size_t led;                                   ///< LED index to animate
+      size_t led = 0;                               ///< LED index to animate
       cjf::color color;                             ///< Peak color at full brightness
       TickType_t period;                            ///< Full cycle duration (fade in + fade out)
       easing_func easing = easing::linear;          ///< Easing function
@@ -157,7 +157,7 @@ namespace cjf
      */
     struct config
     {
-      size_t led;                                   ///< LED index to animate
+      size_t led = 0;                               ///< LED index to animate
       uint8_t brightness = 255;                     ///< LED brightness (0-255)
       uint8_t saturation = 255;                     ///< Color saturation (0-255)
       uint16_t phase = 0;                           ///< Starting hue (0-359 degrees)
@@ -203,7 +203,7 @@ namespace cjf
      */
     struct config
     {
-      size_t led;       ///< LED index to set
+      size_t led = 0;   ///< LED index to set
       cjf::color color; ///< Color to display
     };
 

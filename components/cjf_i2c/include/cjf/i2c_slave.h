@@ -1,6 +1,10 @@
 #ifndef E585C4A4_AA7B_4EE1_BA4A_60D388713CB5
 #define E585C4A4_AA7B_4EE1_BA4A_60D388713CB5
 
+#include <sdkconfig.h>
+
+#if CONFIG_I2C_ENABLE_SLAVE_DRIVER_VERSION_2
+
 #include "cjf/i2c_bus.h"
 #include <driver/i2c_slave.h>
 #include <expected>
@@ -55,5 +59,9 @@ namespace cjf
   };
 
 } // namespace cjf
+
+#else
+#error "cjf::i2c_slave requires I2C slave driver version 2. Enable it in menuconfig (Component config > ESP-Driver:I2C Configurations > Enable I2C slave driver version 2)"
+#endif
 
 #endif /* E585C4A4_AA7B_4EE1_BA4A_60D388713CB5 */
